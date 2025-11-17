@@ -26,7 +26,7 @@ from gepa.strategies.component_selector import (
     AllReflectionComponentSelector,
     RoundRobinReflectionComponentSelector,
 )
-from gepa.strategies.eval_policy import EvaluationPolicy, FullEvaluationPolicy
+from gepa.strategies.eval_policy import EvaluationPolicy, FullEvaluationPolicy, KFoldRotationEvaluationPolicy
 from gepa.utils import FileStopper, StopperProtocol
 
 
@@ -68,7 +68,7 @@ def optimize(
     # Reproducibility
     seed: int = 0,
     raise_on_exception: bool = True,
-    val_evaluation_policy: EvaluationPolicy[DataId, DataInst] | Literal["full_eval"] | None = None,
+    val_evaluation_policy: EvaluationPolicy[DataId, DataInst] | Literal["full_eval", "kfold"] | None = None,
 ) -> GEPAResult[RolloutOutput, DataId]:
     """
     GEPA is an evolutionary optimizer that evolves (multiple) text components of a complex system to optimize them towards a given metric.
@@ -149,7 +149,7 @@ def optimize(
 
     # Reproducibility
     - seed: The seed to use for the random number generator.
-    - val_evaluation_policy: Strategy controlling which validation ids to score each iteration and which candidate is currently best. Supported strings: "full_eval" (evaluate every id each time) Passing None defaults to "full_eval".
+    - val_evaluation_policy: Strategy controlling which validation ids to score each iteration and which candidate is currently best. Supported strings: "full_eval" (evaluate every id each time), "kfold" (K-fold rotation to reduce overfitting). Passing None defaults to "full_eval".
     - raise_on_exception: Whether to propagate proposer/evaluator exceptions instead of stopping gracefully.
     """
     if adapter is None:
@@ -252,9 +252,11 @@ def optimize(
 
     if val_evaluation_policy is None or val_evaluation_policy == "full_eval":
         val_evaluation_policy = FullEvaluationPolicy()
+    elif val_evaluation_policy == "kfold":
+        val_evaluation_policy = KFoldRotationEvaluationPolicy(num_folds=5)
     elif not isinstance(val_evaluation_policy, EvaluationPolicy):
         raise ValueError(
-            f"val_evaluation_policy should be one of 'full_eval' or an instance of EvaluationPolicy, but got {type(val_evaluation_policy)}"
+            f"val_evaluation_policy should be one of 'full_eval', 'kfold' or an instance of EvaluationPolicy, but got {type(val_evaluation_policy)}"
         )
 
     if isinstance(module_selector, str):
