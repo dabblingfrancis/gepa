@@ -9,7 +9,7 @@ Successfully implemented K-fold cross-validation evaluation policy for GEPA that
 - Added `KFoldRotationEvaluationPolicy` class
 - Partitions validation set into K folds (default: 5)
 - Rotates evaluation folds each iteration to prevent overfitting
-- Each iteration evaluates (K-1)/K of the validation data
+- Each iteration evaluates 1/K of the validation data (one fold)
 
 ### 2. API Integration (`src/gepa/api.py`)
 - Added "kfold" as a string option for `val_evaluation_policy` parameter
@@ -52,16 +52,16 @@ result = gepa.optimize(
 **Partitioning**: V = V₁ ∪ V₂ ∪ ... ∪ Vₖ
 
 **Rotation Schedule**:
-- Iteration 0: Evaluate on V₂...Vₖ (excludes V₁)
-- Iteration 1: Evaluate on V₁,V₃...Vₖ (excludes V₂)
-- Iteration K-1: Evaluate on V₁...Vₖ₋₁ (excludes Vₖ)
-- Iteration K: Back to V₂...Vₖ (cycle repeats)
+- Iteration 0: Evaluate on V₁ (use V₁ for evaluation)
+- Iteration 1: Evaluate on V₂ (use V₂ for evaluation)
+- Iteration K-1: Evaluate on Vₖ (use Vₖ for evaluation)
+- Iteration K: Back to V₁ (cycle repeats)
 
 ## Benefits
 
 1. **Reduced Overfitting**: Model never repeatedly optimizes on the same validation split
 2. **Better Generalization**: Each iteration sees different evaluation data
-3. **Efficient**: Still evaluates majority of validation data (4/5 with default 5 folds)
+3. **Efficient**: Evaluates 1/K of validation data per iteration (1/5 with default 5 folds)
 4. **Drop-in Replacement**: Works as a simple string option or custom instance
 
 ## Files Modified/Created
@@ -85,10 +85,10 @@ Created:
 
 ## Comparison with Other Policies
 
-| Policy | Coverage | Overfitting Risk | Computation |
-|--------|----------|------------------|-------------|
+| Policy | Coverage per Iteration | Overfitting Risk | Computation |
+|--------|------------------------|------------------|-------------|
 | `full_eval` | 100% | High | High |
-| `kfold` (K=5) | 80% | Low | Medium |
+| `kfold` (K=5) | 20% | Low | Low |
 | Custom sampling | Variable | Medium | Low-Medium |
 
 ## When to Use K-Fold

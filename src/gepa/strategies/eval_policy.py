@@ -107,11 +107,11 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     def get_eval_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
     ) -> list[DataId]:
-        """Return evaluation fold: all ids except the current candidate-selection fold.
+        """Return evaluation fold: one fold V_i for evaluation.
 
         The fold used for evaluation rotates with each iteration. At iteration t,
-        fold (t % K) is used for candidate selection, and the remaining folds are
-        used for evaluation.
+        fold (t % K) is used for evaluation, and the remaining folds are
+        used for candidate selection.
         """
         if not self._initialized:
             self._initialize_folds(loader)
@@ -123,13 +123,8 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         iteration = len(state.prog_candidate_val_subscores)
         current_fold_idx = iteration % self.num_folds
 
-        # Evaluation fold = V \ V_i (all folds except the candidate-selection fold)
-        eval_ids = []
-        for i, fold in enumerate(self._folds):
-            if i != current_fold_idx:
-                eval_ids.extend(fold)
-
-        return eval_ids
+        # Evaluation fold = V_i (single fold for evaluation)
+        return list(self._folds[current_fold_idx])
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
         """Pick the program whose evaluated validation scores achieve the highest average."""
