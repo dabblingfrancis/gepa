@@ -26,7 +26,7 @@ from gepa.strategies.component_selector import (
     AllReflectionComponentSelector,
     RoundRobinReflectionComponentSelector,
 )
-from gepa.strategies.eval_policy import EvaluationPolicy, FullEvaluationPolicy, SubsampleEvaluationPolicy, RandomSplitEvaluationPolicy
+from gepa.strategies.eval_policy import EvaluationPolicy, FullEvaluationPolicy, RandomSplitEvaluationPolicy
 from gepa.utils import FileStopper, StopperProtocol
 
 

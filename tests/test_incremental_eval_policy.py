@@ -2,7 +2,7 @@ import gepa
 from gepa.core.adapter import EvaluationBatch
 from gepa.core.data_loader import DataId, DataInst, DataLoader, ListDataLoader
 from gepa.core.state import GEPAState, ProgramIdx
-from gepa.strategies.eval_policy import SubsampleEvaluationPolicy
+from gepa.strategies.eval_policy import EvaluationPolicy
 
 
 class AutoExpandingListLoader(ListDataLoader):
@@ -51,6 +51,54 @@ class DummyAdapter:
         return dict.fromkeys(components_to_update, f"weight={weight + 1}")
 
 
+class RoundRobinSampleEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
+    """Policy that samples validation examples with fewest recorded evaluations."""
+
+    def __init__(self, batch_size: int = 5):
+        if batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        self.batch_size = batch_size
+
+    def get_eval_batch(
+        self,
+        loader: DataLoader[DataId, DataInst],
+        state: GEPAState,
+        target_program_idx: ProgramIdx | None = None,
+    ) -> list[DataId]:
+        """Return ids sorted by how often they've been evaluated, preferring ids that have been least leveraged for eval (in particular preferring examples not yet evaluated)."""
+        all_ids = list(loader.all_ids())
+        if not all_ids:
+            return []
+
+        order_index = {val_id: idx for idx, val_id in enumerate(all_ids)}
+        valset_evaluations = state.valset_evaluations
+
+        def sort_key(val_id: DataId):
+            eval_count = len(valset_evaluations.get(val_id, []))
+            return (eval_count, order_index[val_id])
+
+        ordered_ids = sorted(all_ids, key=sort_key)
+        batch = ordered_ids[: self.batch_size] or ordered_ids
+
+        return batch
+
+    def get_best_program(self, state: GEPAState) -> ProgramIdx:
+        """Pick the program whose evaluated validation scores achieve the highest average."""
+        best_idx, best_score, best_coverage = -1, float("-inf"), -1
+        for program_idx, scores in enumerate(state.prog_candidate_val_subscores):
+            coverage = len(scores)
+            avg = sum(scores.values()) / coverage if coverage else float("-inf")
+            if avg > best_score or (avg == best_score and coverage > best_coverage):
+                best_score = avg
+                best_idx = program_idx
+                best_coverage = coverage
+        return best_idx
+
+    def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
+        """Return the score of the program on the valset"""
+        return state.get_program_average_val_subset(program_idx)[0]
+
+
 def test_incremental_eval_policy_handles_dynamic_valset(tmp_path):
     trainset = [
         {"id": 0, "difficulty": 2, "split": "train"},
@@ -77,7 +125,7 @@ def test_incremental_eval_policy_handles_dynamic_valset(tmp_path):
         candidate_selection_strategy="current_best",
         max_metric_calls=12,
         run_dir=str(tmp_path / "run"),
-        val_evaluation_policy=SubsampleEvaluationPolicy(batch_size=2),
+        val_evaluation_policy=RoundRobinSampleEvaluationPolicy(batch_size=2),
     )
 
     assert val_loader.expansions == 1

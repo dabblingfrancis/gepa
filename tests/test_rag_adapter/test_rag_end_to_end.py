@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 from test_data_loader import StagedDataLoader
+from test_incremental_eval_policy import RoundRobinSampleEvaluationPolicy
 
 from gepa.adapters.generic_rag_adapter.generic_rag_adapter import GenericRAGAdapter
-from gepa.strategies.eval_policy import SubsampleEvaluationPolicy
 
 
 @pytest.fixture
@@ -504,7 +504,7 @@ def test_rag_dynamic_valset_round_robin_sample(sample_ai_ml_dataset, mock_chroma
         reflection_lm=simple_reflection_lm,
         candidate_selection_strategy="current_best",
         max_metric_calls=15,
-        val_evaluation_policy=SubsampleEvaluationPolicy(batch_size=1),
+        val_evaluation_policy=RoundRobinSampleEvaluationPolicy(batch_size=1),
         run_dir=str(tmp_path / "dynamic_val_run"),
     )
 
@@ -530,7 +530,7 @@ def test_rag_dynamic_valset_round_robin_sample(sample_ai_ml_dataset, mock_chroma
         reflection_lm=simple_reflection_lm,
         candidate_selection_strategy="current_best",
         max_metric_calls=12,
-        val_evaluation_policy=SubsampleEvaluationPolicy(batch_size=1),
+        val_evaluation_policy=RoundRobinSampleEvaluationPolicy(batch_size=1),
         run_dir=str(tmp_path / "dynamic_val_run_stage2"),
     )
 
