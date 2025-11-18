@@ -347,4 +347,4 @@ def optimize(
     with experiment_tracker:
         state = engine.run()
 
-    return GEPAResult.from_state(state, run_dir=run_dir, seed=seed, val_evaluation_policy=val_evaluation_policy)
+    return GEPAResult.from_state(state, run_dir=run_dir, seed=seed)
