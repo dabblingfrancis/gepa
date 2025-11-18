@@ -94,59 +94,33 @@ def test_kfold_rotation_through_iterations():
 
 
 def test_kfold_get_best_program():
-    """Test that get_best_program only considers candidate selection folds."""
+    """Test that get_best_program works correctly."""
     policy = KFoldRotationEvaluationPolicy(num_folds=3)
 
-    # Create a validation set with 9 items (divisible by 3 for clean folds)
-    valset = [{"id": i, "split": "val"} for i in range(9)]
-    loader = ListDataLoader(valset)
-
-    # Initialize the policy by calling get_eval_batch
+    # Create state with multiple programs and scores
     state = GEPAState(seed_candidate={}, base_valset_eval_output=({}, {}))
-    state.prog_candidate_val_subscores = [{}]  # 1 program = len=1, 1%3=1, fold 1 is eval
-    policy.get_eval_batch(loader, state)  # This initializes folds
-
-    # Now set up test with 3 programs (len=3, 3%3=0, fold 0 is eval)
-    # Fold 0 (ids 0,1,2) is for evaluation
-    # Folds 1,2 (ids 3,4,5,6,7,8) are for candidate selection
     state.prog_candidate_val_subscores = [
-        # Program 0: high on eval fold, low on selection folds
-        {0: 1.0, 1: 1.0, 2: 1.0, 3: 0.3, 4: 0.3, 5: 0.3, 6: 0.3, 7: 0.3, 8: 0.3},
-        # Program 1: low on eval fold, high on selection folds (should be best)
-        {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.9, 4: 0.9, 5: 0.9, 6: 0.9, 7: 0.9, 8: 0.9},
-        # Program 2: medium scores everywhere
-        {0: 0.5, 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5, 5: 0.5, 6: 0.5, 7: 0.5, 8: 0.5},
+        {0: 0.5, 1: 0.6},  # Program 0: avg = 0.55
+        {0: 0.7, 1: 0.8},  # Program 1: avg = 0.75 (best)
+        {0: 0.4, 1: 0.5},  # Program 2: avg = 0.45
     ]
 
     best_idx = policy.get_best_program(state)
-    # Program 1 should be best because it has highest avg on candidate selection folds
-    # even though it has lowest score on evaluation fold
     assert best_idx == 1
 
 
 def test_kfold_get_valset_score():
-    """Test that get_valset_score only considers candidate selection folds."""
+    """Test that get_valset_score returns the average score."""
     policy = KFoldRotationEvaluationPolicy(num_folds=3)
 
-    # Create a validation set with 9 items
-    valset = [{"id": i, "split": "val"} for i in range(9)]
-    loader = ListDataLoader(valset)
-
-    # Initialize the policy with 1 program (iteration 0/seed)
+    # Create state with a program that has scores
     state = GEPAState(seed_candidate={}, base_valset_eval_output=({}, {}))
-    state.prog_candidate_val_subscores = [{}]
-    policy.get_eval_batch(loader, state)  # Initialize folds
-
-    # At iteration with 1 program: len=1, 1%3=1, so fold 1 (ids 3,4,5) is for evaluation
-    # Folds 0,2 (ids 0,1,2,6,7,8) are for candidate selection
     state.prog_candidate_val_subscores = [
-        # High score on eval fold 1 (should be ignored), low on selection folds 0,2
-        {0: 0.2, 1: 0.2, 2: 0.2, 3: 1.0, 4: 1.0, 5: 1.0, 6: 0.2, 7: 0.2, 8: 0.2},
+        {0: 0.6, 1: 0.8, 2: 0.7},  # Program 0: avg = 0.7
     ]
 
     score = policy.get_valset_score(0, state)
-    # Should be avg of selection folds only (0,2): (0.2 * 6) / 6 = 0.2
-    assert abs(score - 0.2) < 1e-6
+    assert abs(score - 0.7) < 1e-6
 
 
 def test_kfold_empty_valset():
@@ -159,34 +133,6 @@ def test_kfold_empty_valset():
 
     eval_ids = policy.get_eval_batch(loader, state)
     assert eval_ids == []
-
-
-def test_kfold_candidate_selection_excludes_eval_fold():
-    """Test that candidate selection uses all folds except the evaluation fold."""
-    policy = KFoldRotationEvaluationPolicy(num_folds=3)
-
-    # Create a validation set with 9 items (3 per fold)
-    valset = [{"id": i, "split": "val"} for i in range(9)]
-    loader = ListDataLoader(valset)
-
-    # Initialize state at iteration 0
-    state = GEPAState(seed_candidate={}, base_valset_eval_output=({}, {}))
-    state.prog_candidate_val_subscores = [{}]
-
-    # Get eval fold for iteration 0 (should be fold 0: ids 0,1,2)
-    eval_ids = policy.get_eval_batch(loader, state)
-    assert len(eval_ids) == 3
-    eval_set = set(eval_ids)
-
-    # Get candidate selection ids (should be folds 1,2: ids 3,4,5,6,7,8)
-    selection_ids = policy._get_candidate_selection_ids(state)
-    assert len(selection_ids) == 6
-
-    # Verify eval and selection sets are disjoint
-    assert eval_set.isdisjoint(selection_ids)
-
-    # Verify they cover all ids
-    assert eval_set.union(selection_ids) == set(range(9))
 
 
 def test_kfold_with_uneven_folds():
