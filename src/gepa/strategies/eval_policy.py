@@ -107,11 +107,11 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     def get_eval_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
     ) -> list[DataId]:
-        """Return evaluation fold: all ids except the current candidate-selection fold.
+        """Return evaluation fold: one fold V_i for evaluation.
 
         The fold used for evaluation rotates with each iteration. At iteration t,
-        fold (t % K) is used for candidate selection, and the remaining folds are
-        used for evaluation.
+        fold (t % K) is used for evaluation, and the remaining folds are
+        used for candidate selection.
         """
         if not self._initialized:
             self._initialize_folds(loader)
@@ -123,20 +123,40 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         iteration = len(state.prog_candidate_val_subscores)
         current_fold_idx = iteration % self.num_folds
 
-        # Evaluation fold = V \ V_i (all folds except the candidate-selection fold)
-        eval_ids = []
+        # Evaluation fold = V_i (single fold for evaluation)
+        return list(self._folds[current_fold_idx])
+
+    def _get_candidate_selection_ids(self, state: GEPAState) -> set[DataId]:
+        """Return the IDs used for candidate selection (all folds except evaluation fold)."""
+        if not self._initialized or not self._all_ids:
+            return set()
+
+        # Determine current iteration from the number of programs
+        iteration = len(state.prog_candidate_val_subscores)
+        current_fold_idx = iteration % self.num_folds
+
+        # Candidate selection uses all folds EXCEPT the evaluation fold
+        selection_ids = []
         for i, fold in enumerate(self._folds):
             if i != current_fold_idx:
-                eval_ids.extend(fold)
+                selection_ids.extend(fold)
 
-        return eval_ids
+        return set(selection_ids)
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
-        """Pick the program whose evaluated validation scores achieve the highest average."""
+        """Pick the program whose scores on candidate selection folds achieve the highest average.
+
+        Only considers scores from folds used for candidate selection (not the evaluation fold).
+        """
+        # Get IDs that should be used for candidate selection
+        selection_ids = self._get_candidate_selection_ids(state)
+
         best_idx, best_score, best_coverage = -1, float("-inf"), -1
         for program_idx, scores in enumerate(state.prog_candidate_val_subscores):
-            coverage = len(scores)
-            avg = sum(scores.values()) / coverage if coverage else float("-inf")
+            # Only consider scores from candidate selection folds
+            selection_scores = {id: score for id, score in scores.items() if id in selection_ids}
+            coverage = len(selection_scores)
+            avg = sum(selection_scores.values()) / coverage if coverage else float("-inf")
             if avg > best_score or (avg == best_score and coverage > best_coverage):
                 best_score = avg
                 best_idx = program_idx
@@ -144,8 +164,20 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return best_idx
 
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
-        """Return the score of the program on the valset"""
-        return state.get_program_average_val_subset(program_idx)[0]
+        """Return the score of the program on the candidate selection folds.
+
+        Only considers scores from folds used for candidate selection (not the evaluation fold).
+        """
+        selection_ids = self._get_candidate_selection_ids(state)
+        scores = state.prog_candidate_val_subscores[program_idx]
+
+        # Filter to only candidate selection fold scores
+        selection_scores = {id: score for id, score in scores.items() if id in selection_ids}
+
+        if not selection_scores:
+            return float("-inf")
+
+        return sum(selection_scores.values()) / len(selection_scores)
 
 
 __all__ = [

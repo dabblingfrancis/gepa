@@ -9,7 +9,7 @@ Successfully implemented K-fold cross-validation evaluation policy for GEPA that
 - Added `KFoldRotationEvaluationPolicy` class
 - Partitions validation set into K folds (default: 5)
 - Rotates evaluation folds each iteration to prevent overfitting
-- Each iteration evaluates (K-1)/K of the validation data
+- Each iteration evaluates 1/K of the validation data (one fold)
 
 ### 2. API Integration (`src/gepa/api.py`)
 - Added "kfold" as a string option for `val_evaluation_policy` parameter
@@ -52,16 +52,18 @@ result = gepa.optimize(
 **Partitioning**: V = V₁ ∪ V₂ ∪ ... ∪ Vₖ
 
 **Rotation Schedule**:
-- Iteration 0: Evaluate on V₂...Vₖ (excludes V₁)
-- Iteration 1: Evaluate on V₁,V₃...Vₖ (excludes V₂)
-- Iteration K-1: Evaluate on V₁...Vₖ₋₁ (excludes Vₖ)
-- Iteration K: Back to V₂...Vₖ (cycle repeats)
+- Iteration 0 (seed): Evaluate on V₁, select candidates using V₂...Vₖ
+- Iteration 1: Evaluate on V₂, select candidates using V₁,V₃...Vₖ
+- Iteration K-1: Evaluate on Vₖ, select candidates using V₁...Vₖ₋₁
+- Iteration K: Back to V₁ (cycle repeats)
+
+**Key Insight**: At each iteration, one fold is reserved for evaluation of the newly proposed program, while the remaining (K-1) folds are used for candidate selection (determining which program to evolve from).
 
 ## Benefits
 
-1. **Reduced Overfitting**: Model never repeatedly optimizes on the same validation split
-2. **Better Generalization**: Each iteration sees different evaluation data
-3. **Efficient**: Still evaluates majority of validation data (4/5 with default 5 folds)
+1. **Reduced Overfitting**: Candidate selection and evaluation use disjoint data, preventing overfitting to a single split
+2. **Better Generalization**: Each iteration evaluates on different data and selects candidates based on different data
+3. **Efficient**: Evaluates only 1/K of validation data per iteration (1/5 with default 5 folds), reducing computational cost
 4. **Drop-in Replacement**: Works as a simple string option or custom instance
 
 ## Files Modified/Created
@@ -85,11 +87,11 @@ Created:
 
 ## Comparison with Other Policies
 
-| Policy | Coverage | Overfitting Risk | Computation |
-|--------|----------|------------------|-------------|
-| `full_eval` | 100% | High | High |
-| `kfold` (K=5) | 80% | Low | Medium |
-| Custom sampling | Variable | Medium | Low-Medium |
+| Policy | Eval Coverage per Iteration | Selection Coverage | Overfitting Risk | Computation |
+|--------|----------------------------|-------------------|------------------|-------------|
+| `full_eval` | 100% | 100% | High | High |
+| `kfold` (K=5) | 20% (1 fold) | 80% (4 folds) | Low | Low |
+| Custom sampling | Variable | Variable | Medium | Low-Medium |
 
 ## When to Use K-Fold
 
