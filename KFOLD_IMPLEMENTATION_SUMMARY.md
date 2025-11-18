@@ -52,16 +52,18 @@ result = gepa.optimize(
 **Partitioning**: V = V₁ ∪ V₂ ∪ ... ∪ Vₖ
 
 **Rotation Schedule**:
-- Iteration 0: Evaluate on V₁ (use V₁ for evaluation)
-- Iteration 1: Evaluate on V₂ (use V₂ for evaluation)
-- Iteration K-1: Evaluate on Vₖ (use Vₖ for evaluation)
+- Iteration 0 (seed): Evaluate on V₁, select candidates using V₂...Vₖ
+- Iteration 1: Evaluate on V₂, select candidates using V₁,V₃...Vₖ
+- Iteration K-1: Evaluate on Vₖ, select candidates using V₁...Vₖ₋₁
 - Iteration K: Back to V₁ (cycle repeats)
+
+**Key Insight**: At each iteration, one fold is reserved for evaluation of the newly proposed program, while the remaining (K-1) folds are used for candidate selection (determining which program to evolve from).
 
 ## Benefits
 
-1. **Reduced Overfitting**: Model never repeatedly optimizes on the same validation split
-2. **Better Generalization**: Each iteration sees different evaluation data
-3. **Efficient**: Evaluates 1/K of validation data per iteration (1/5 with default 5 folds)
+1. **Reduced Overfitting**: Candidate selection and evaluation use disjoint data, preventing overfitting to a single split
+2. **Better Generalization**: Each iteration evaluates on different data and selects candidates based on different data
+3. **Efficient**: Evaluates only 1/K of validation data per iteration (1/5 with default 5 folds), reducing computational cost
 4. **Drop-in Replacement**: Works as a simple string option or custom instance
 
 ## Files Modified/Created
@@ -85,11 +87,11 @@ Created:
 
 ## Comparison with Other Policies
 
-| Policy | Coverage per Iteration | Overfitting Risk | Computation |
-|--------|------------------------|------------------|-------------|
-| `full_eval` | 100% | High | High |
-| `kfold` (K=5) | 20% | Low | Low |
-| Custom sampling | Variable | Medium | Low-Medium |
+| Policy | Eval Coverage per Iteration | Selection Coverage | Overfitting Risk | Computation |
+|--------|----------------------------|-------------------|------------------|-------------|
+| `full_eval` | 100% | 100% | High | High |
+| `kfold` (K=5) | 20% (1 fold) | 80% (4 folds) | Low | Low |
+| Custom sampling | Variable | Variable | Medium | Low-Medium |
 
 ## When to Use K-Fold
 
