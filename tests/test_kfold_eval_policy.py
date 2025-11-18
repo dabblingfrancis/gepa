@@ -189,6 +189,57 @@ def test_kfold_candidate_selection_excludes_eval_fold():
     assert eval_set.union(selection_ids) == set(range(9))
 
 
+def test_kfold_final_methods_use_all_scores():
+    """Test that final methods use all available validation scores, not just selection folds."""
+    policy = KFoldRotationEvaluationPolicy(num_folds=3)
+
+    # Create a validation set with 9 items
+    valset = [{"id": i, "split": "val"} for i in range(9)]
+    loader = ListDataLoader(valset)
+
+    # Initialize the policy with 1 program
+    state = GEPAState(seed_candidate={}, base_valset_eval_output=({}, {}))
+    state.prog_candidate_val_subscores = [{}]
+    policy.get_eval_batch(loader, state)  # Initialize folds
+
+    # With 2 programs: len=2, 2%3=2, so fold 2 (ids 6,7,8) is for evaluation
+    # Folds 0,1 (ids 0,1,2,3,4,5) are for candidate selection
+    # Set up programs where selection-only and full scores differ
+    state.prog_candidate_val_subscores = [
+        # Program 0: low on selection folds (0,1), high on eval fold (2)
+        {0: 0.1, 1: 0.1, 2: 0.1, 3: 0.1, 4: 0.1, 5: 0.1, 6: 1.0, 7: 1.0, 8: 1.0},
+        # Program 1: high on selection folds (0,1), low on eval fold (2)
+        {0: 1.0, 1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 0.1, 7: 0.1, 8: 0.1},
+    ]
+
+    # During optimization: use selection folds only (folds 0,1)
+    best_idx_during = policy.get_best_program(state)
+    score_0_during = policy.get_valset_score(0, state)
+    score_1_during = policy.get_valset_score(1, state)
+
+    # Program 1 should be best during optimization (1.0 avg on selection folds vs 0.1)
+    assert best_idx_during == 1
+    assert abs(score_0_during - 0.1) < 1e-6  # Avg of selection folds for program 0
+    assert abs(score_1_during - 1.0) < 1e-6  # Avg of selection folds for program 1
+
+    # At the end: use all scores
+    best_idx_final = policy.get_best_program_final(state)
+    score_0_final = policy.get_valset_score_final(0, state)
+    score_1_final = policy.get_valset_score_final(1, state)
+
+    # Overall averages:
+    # Program 0: (6*0.1 + 3*1.0) / 9 = 3.6/9 = 0.4
+    # Program 1: (6*1.0 + 3*0.1) / 9 = 6.3/9 = 0.7
+    # So program 1 is still best, but scores are different
+    assert best_idx_final == 1
+    assert abs(score_0_final - 0.4) < 1e-6
+    assert abs(score_1_final - 0.7) < 1e-6
+
+    # Verify the final scores are different from selection-only scores
+    assert abs(score_0_final - score_0_during) > 0.2  # 0.4 vs 0.1
+    assert abs(score_1_final - score_1_during) > 0.2  # 0.7 vs 1.0
+
+
 def test_kfold_with_uneven_folds():
     """Test that K-fold policy handles validation sets not divisible by K."""
     policy = KFoldRotationEvaluationPolicy(num_folds=4)

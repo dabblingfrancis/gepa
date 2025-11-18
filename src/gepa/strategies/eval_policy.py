@@ -56,6 +56,20 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         """Return the score of the program on the valset"""
         return state.get_program_average_val_subset(program_idx)[0]
 
+    def get_best_program_final(self, state: GEPAState) -> ProgramIdx:
+        """Pick the program with highest average on the complete validation set.
+
+        For FullEvaluationPolicy, this is the same as get_best_program() since all data is always used.
+        """
+        return self.get_best_program(state)
+
+    def get_valset_score_final(self, program_idx: ProgramIdx, state: GEPAState) -> float:
+        """Return the score of the program on the complete validation set.
+
+        For FullEvaluationPolicy, this is the same as get_valset_score() since all data is always used.
+        """
+        return self.get_valset_score(program_idx, state)
+
 
 class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that partitions validation set into K folds and rotates through them each iteration.
@@ -178,6 +192,35 @@ class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             return float("-inf")
 
         return sum(selection_scores.values()) / len(selection_scores)
+
+    def get_best_program_final(self, state: GEPAState) -> ProgramIdx:
+        """Pick the program with highest average on the complete validation set.
+
+        Used at the end of optimization to determine the final best program across all validation data.
+        Unlike get_best_program(), this uses ALL available validation scores, not just candidate selection folds.
+        """
+        best_idx, best_score, best_coverage = -1, float("-inf"), -1
+        for program_idx, scores in enumerate(state.prog_candidate_val_subscores):
+            coverage = len(scores)
+            avg = sum(scores.values()) / coverage if coverage else float("-inf")
+            if avg > best_score or (avg == best_score and coverage > best_coverage):
+                best_score = avg
+                best_idx = program_idx
+                best_coverage = coverage
+        return best_idx
+
+    def get_valset_score_final(self, program_idx: ProgramIdx, state: GEPAState) -> float:
+        """Return the score of the program on the complete validation set.
+
+        Used at the end of optimization to report final performance across all validation data.
+        Unlike get_valset_score(), this uses ALL available validation scores, not just candidate selection folds.
+        """
+        scores = state.prog_candidate_val_subscores[program_idx]
+
+        if not scores:
+            return float("-inf")
+
+        return sum(scores.values()) / len(scores)
 
 
 __all__ = [

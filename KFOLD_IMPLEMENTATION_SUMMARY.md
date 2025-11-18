@@ -59,12 +59,15 @@ result = gepa.optimize(
 
 **Key Insight**: At each iteration, one fold is reserved for evaluation of the newly proposed program, while the remaining (K-1) folds are used for candidate selection (determining which program to evolve from).
 
+**Final Reporting**: At the end of optimization, the best program and validation scores are calculated using ALL available validation data (not just candidate selection folds) to provide an accurate assessment of final performance.
+
 ## Benefits
 
-1. **Reduced Overfitting**: Candidate selection and evaluation use disjoint data, preventing overfitting to a single split
+1. **Reduced Overfitting**: Candidate selection and evaluation use disjoint data during optimization, preventing overfitting to a single split
 2. **Better Generalization**: Each iteration evaluates on different data and selects candidates based on different data
-3. **Efficient**: Evaluates only 1/K of validation data per iteration (1/5 with default 5 folds), reducing computational cost
-4. **Drop-in Replacement**: Works as a simple string option or custom instance
+3. **Accurate Final Reporting**: Final results use complete validation set for true performance assessment
+4. **Efficient**: Evaluates only 1/K of validation data per iteration (1/5 with default 5 folds), reducing computational cost
+5. **Drop-in Replacement**: Works as a simple string option or custom instance
 
 ## Files Modified/Created
 

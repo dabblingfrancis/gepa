@@ -176,13 +176,31 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
         state: "GEPAState[RolloutOutput, DataId]",
         run_dir: str | None = None,
         seed: int | None = None,
+        val_evaluation_policy: Any | None = None,
     ) -> "GEPAResult[RolloutOutput, DataId]":
-        """Build a GEPAResult from a GEPAState."""
+        """Build a GEPAResult from a GEPAState.
+
+        Args:
+            state: The GEPA state to build from
+            run_dir: Optional run directory path
+            seed: Optional RNG seed
+            val_evaluation_policy: Optional evaluation policy. If provided and has get_valset_score_final,
+                                   uses it to compute final validation scores. Otherwise falls back to
+                                   state.program_full_scores_val_set.
+        """
+        # Compute val_aggregate_scores using the evaluation policy's final method if available
+        if val_evaluation_policy is not None and hasattr(val_evaluation_policy, "get_valset_score_final"):
+            val_aggregate_scores = [
+                val_evaluation_policy.get_valset_score_final(program_idx, state)
+                for program_idx in range(len(state.prog_candidate_val_subscores))
+            ]
+        else:
+            val_aggregate_scores = list(state.program_full_scores_val_set)
 
         return GEPAResult(
             candidates=list(state.program_candidates),
             parents=list(state.parent_program_for_candidate),
-            val_aggregate_scores=list(state.program_full_scores_val_set),
+            val_aggregate_scores=val_aggregate_scores,
             best_outputs_valset=getattr(state, "best_outputs_valset", None),
             val_subscores=[dict(scores) for scores in state.prog_candidate_val_subscores],
             per_val_instance_best_candidates={
