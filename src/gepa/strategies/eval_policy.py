@@ -60,14 +60,14 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
 class KFoldRotationEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that partitions validation set into K folds and rotates through them each iteration.
 
-    At each iteration t, one fold V_i is used for candidate selection, and the remaining
-    folds V \\ V_i are used for evaluation. After each iteration, the fold rotates to prevent
+    At each iteration t, one fold V_i is used for evaluation, and the remaining
+    folds V \\ V_i are used for candidate selection. After each iteration, the fold rotates to prevent
     overfitting to any single validation split.
 
-    Iteration 1 → use fold V1 for selection, V2...VK for evaluation
-    Iteration 2 → use fold V2 for selection, V1,V3...VK for evaluation
+    Iteration 1 → use fold V1 for evaluation, V2...VK for selection
+    Iteration 2 → use fold V2 for evaluation, V1,V3...VK for selection
     ...
-    Iteration K → use fold VK for selection, V1...VK-1 for evaluation
+    Iteration K → use fold VK for evaluation, V1...VK-1 for selection
     Iteration K+1 → V1 again (cycle repeats)
     """
 
