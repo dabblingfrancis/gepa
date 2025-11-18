@@ -30,15 +30,15 @@ def test_random_split_initialization():
 
 
 def test_random_split_batch_selection():
-    """Test that get_eval_batch returns the selection subset."""
+    """Test that get_eval_batch returns the evaluation subset."""
     policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
     loader = ListDataLoader([{"id": i} for i in range(10)])
     state = MockState()
     
-    # Get the selection batch
+    # Get the evaluation batch
     batch = policy.get_eval_batch(loader, state)
     
-    # Should get approximately 50% of the data
+    # Should get approximately 50% of the data (evaluation subset when selection_ratio=0.5)
     assert len(batch) == 5
     
     # Should return the same batch on subsequent calls (persistent split)
@@ -51,15 +51,15 @@ def test_random_split_different_ratios():
     loader = ListDataLoader([{"id": i} for i in range(100)])
     state = MockState()
     
-    # Test 30% selection
+    # Test 30% selection (70% evaluation)
     policy_30 = RandomSplitEvaluationPolicy(selection_ratio=0.3, seed=42)
     batch_30 = policy_30.get_eval_batch(loader, state)
-    assert len(batch_30) == 30
+    assert len(batch_30) == 70  # Returns evaluation batch, which is 70%
     
-    # Test 70% selection
+    # Test 70% selection (30% evaluation)
     policy_70 = RandomSplitEvaluationPolicy(selection_ratio=0.7, seed=42)
     batch_70 = policy_70.get_eval_batch(loader, state)
-    assert len(batch_70) == 70
+    assert len(batch_70) == 30  # Returns evaluation batch, which is 30%
 
 
 def test_random_split_empty_loader():

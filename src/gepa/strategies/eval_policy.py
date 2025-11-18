@@ -63,8 +63,8 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that randomly splits validation set into selection and evaluation subsets.
     
     The validation set is split into two subsets:
-    - Selection subset: Used during optimization for candidate selection
-    - Evaluation subset: Reserved for final evaluation
+    - Selection subset: Reserved for candidate selection (not used during optimization)
+    - Evaluation subset: Used during optimization for evaluating candidates
     
     The best program is determined by centering scores per task and selecting
     the program with the highest average centered score.
@@ -104,13 +104,58 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         self._selection_ids = shuffled_ids[:split_point]
         self._evaluation_ids = shuffled_ids[split_point:]
 
+    def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
+        """Compute mean score per task across all programs.
+        
+        Args:
+            state: Current GEPA optimization state.
+            
+        Returns:
+            Dictionary mapping task IDs to their mean scores across all programs.
+        """
+        # Collect all task IDs that have been evaluated
+        all_task_ids: set[DataId] = set()
+        for scores in state.prog_candidate_val_subscores:
+            all_task_ids.update(scores.keys())
+        
+        # Calculate mean score per task across all programs
+        task_means: dict[DataId, float] = {}
+        for task_id in all_task_ids:
+            task_scores = []
+            for scores in state.prog_candidate_val_subscores:
+                if task_id in scores:
+                    task_scores.append(scores[task_id])
+            if task_scores:
+                task_means[task_id] = sum(task_scores) / len(task_scores)
+        
+        return task_means
+
+    def _compute_centered_scores(
+        self, scores: dict[DataId, float], task_means: dict[DataId, float]
+    ) -> list[float]:
+        """Compute centered scores for a program.
+        
+        Args:
+            scores: Dictionary of task scores for a program.
+            task_means: Dictionary mapping task IDs to their mean scores.
+            
+        Returns:
+            List of centered scores (score - mean for each task).
+        """
+        centered_scores = []
+        for task_id, score in scores.items():
+            if task_id in task_means:
+                centered_score = score - task_means[task_id]
+                centered_scores.append(centered_score)
+        return centered_scores
+
     def get_eval_batch(
         self,
         loader: DataLoader[DataId, DataInst],
         state: GEPAState,
         target_program_idx: ProgramIdx | None = None,
     ) -> list[DataId]:
-        """Return the selection subset for evaluation during optimization.
+        """Return the evaluation subset for evaluation during optimization.
         
         Args:
             loader: Data loader containing validation examples.
@@ -118,10 +163,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             target_program_idx: Optional program index (unused in this implementation).
             
         Returns:
-            List of validation IDs in the selection subset.
+            List of validation IDs in the evaluation subset.
         """
         self._initialize_split(loader)
-        return self._selection_ids or []
+        return self._evaluation_ids or []
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
         """Pick the program with the highest average centered score.
@@ -138,23 +183,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         if not state.prog_candidate_val_subscores:
             return -1
         
-        # Collect all task IDs that have been evaluated
-        all_task_ids: set[DataId] = set()
-        for scores in state.prog_candidate_val_subscores:
-            all_task_ids.update(scores.keys())
-        
-        if not all_task_ids:
+        # Compute task means
+        task_means = self._compute_task_means(state)
+        if not task_means:
             return -1
-        
-        # Calculate mean score per task across all programs
-        task_means: dict[DataId, float] = {}
-        for task_id in all_task_ids:
-            task_scores = []
-            for scores in state.prog_candidate_val_subscores:
-                if task_id in scores:
-                    task_scores.append(scores[task_id])
-            if task_scores:
-                task_means[task_id] = sum(task_scores) / len(task_scores)
         
         # Calculate centered scores for each program
         best_idx = -1
@@ -166,11 +198,7 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
                 continue
             
             # Calculate centered score for this program
-            centered_scores = []
-            for task_id, score in scores.items():
-                if task_id in task_means:
-                    centered_score = score - task_means[task_id]
-                    centered_scores.append(centered_score)
+            centered_scores = self._compute_centered_scores(scores, task_means)
             
             if not centered_scores:
                 continue
@@ -206,27 +234,11 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         if not scores:
             return float("-inf")
         
-        # Collect all task IDs
-        all_task_ids: set[DataId] = set()
-        for prog_scores in state.prog_candidate_val_subscores:
-            all_task_ids.update(prog_scores.keys())
-        
-        # Calculate mean score per task
-        task_means: dict[DataId, float] = {}
-        for task_id in all_task_ids:
-            task_scores = []
-            for prog_scores in state.prog_candidate_val_subscores:
-                if task_id in prog_scores:
-                    task_scores.append(prog_scores[task_id])
-            if task_scores:
-                task_means[task_id] = sum(task_scores) / len(task_scores)
+        # Compute task means
+        task_means = self._compute_task_means(state)
         
         # Calculate centered scores for this program
-        centered_scores = []
-        for task_id, score in scores.items():
-            if task_id in task_means:
-                centered_score = score - task_means[task_id]
-                centered_scores.append(centered_score)
+        centered_scores = self._compute_centered_scores(scores, task_means)
         
         if not centered_scores:
             return float("-inf")
