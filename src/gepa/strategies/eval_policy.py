@@ -256,6 +256,21 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             return float("-inf")
         
         return sum(advantages) / len(advantages)
+    
+    def filter_pareto_front(self, pareto_front: dict[DataId, set[ProgramIdx]]) -> dict[DataId, set[ProgramIdx]]:
+        """Filter pareto front to only include selection subset validation IDs.
+        
+        This ensures that candidate selection (e.g., for merging) only considers
+        the pareto front for the selection subset, not the evaluation subset.
+        
+        Args:
+            pareto_front: Full pareto front mapping validation IDs to program indices.
+            
+        Returns:
+            Filtered pareto front containing only selection subset validation IDs.
+        """
+        selection_ids_set = set(self._selection_ids)
+        return {val_id: programs for val_id, programs in pareto_front.items() if val_id in selection_ids_set}
 
 
 __all__ = [

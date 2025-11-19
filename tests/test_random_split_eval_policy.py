@@ -209,3 +209,44 @@ def test_get_best_program_no_scores():
     
     best_idx = policy.get_best_program(state)
     assert best_idx == -1
+
+
+def test_filter_pareto_front():
+    """Test that filter_pareto_front only includes selection IDs."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    loader = ListDataLoader([{"id": i} for i in range(10)])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # Create a pareto front with all validation IDs
+    pareto_front = {
+        0: {0, 1},
+        1: {1},
+        2: {0},
+        3: {1, 2},
+        4: {2},
+        5: {0, 1},
+        6: {1},
+        7: {0, 2},
+        8: {2},
+        9: {0, 1, 2},
+    }
+    
+    # Filter the pareto front
+    filtered = policy.filter_pareto_front(pareto_front)
+    
+    # Check that only selection IDs are included
+    assert len(filtered) == len(policy._selection_ids)
+    for val_id in filtered.keys():
+        assert val_id in policy._selection_ids
+    
+    # Check that evaluation IDs are excluded
+    for val_id in policy._evaluation_ids:
+        assert val_id not in filtered
+    
+    # Check that program sets are preserved
+    for val_id in filtered.keys():
+        assert filtered[val_id] == pareto_front[val_id]
+
