@@ -11,6 +11,16 @@ class MockState:
 
     def __init__(self):
         self.prog_candidate_val_subscores = []
+    
+    def get_program_average_val_subset(self, program_idx):
+        """Mock implementation of get_program_average_val_subset."""
+        if program_idx < 0 or program_idx >= len(self.prog_candidate_val_subscores):
+            return float("-inf"), 0
+        scores = self.prog_candidate_val_subscores[program_idx]
+        if not scores:
+            return float("-inf"), 0
+        avg = sum(scores.values()) / len(scores)
+        return avg, len(scores)
 
 
 def test_random_split_initialization():
@@ -128,7 +138,7 @@ def test_advantage_scoring_with_coverage():
 
 
 def test_get_valset_score():
-    """Test get_valset_score returns advantage."""
+    """Test get_valset_score returns raw average score."""
     policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
     state = MockState()
     
@@ -137,14 +147,23 @@ def test_get_valset_score():
         {0: 0.5, 1: 1.0},
     ]
     
+    # Test get_valset_score - should return raw average
+    # Program 0: [1.0, 0.5] -> avg: 0.75
+    score = policy.get_valset_score(0, state)
+    assert abs(score - 0.75) < 1e-6
+    
+    # Test get_advantage - should return advantage
     # Task means: 0: 0.75, 1: 0.75
     # Program 0 advantage: [0.25, -0.25] -> avg: 0.0
-    score = policy.get_valset_score(0, state)
-    assert abs(score - 0.0) < 1e-6
+    advantage = policy.get_advantage(0, state)
+    assert abs(advantage - 0.0) < 1e-6
     
-    # Invalid index
+    # Invalid index for both methods
     score_invalid = policy.get_valset_score(-1, state)
     assert score_invalid == float("-inf")
+    
+    advantage_invalid = policy.get_advantage(-1, state)
+    assert advantage_invalid == float("-inf")
 
 
 def test_get_best_program_empty_state():

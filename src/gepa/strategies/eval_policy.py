@@ -218,6 +218,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return best_idx
 
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
+        """Return the score of the program on the valset"""
+        return state.get_program_average_val_subset(program_idx)[0]
+
+    def get_advantage(self, program_idx: ProgramIdx, state: GEPAState) -> float:
         """Return the average advantage of the program on the valset.
         
         Args:
