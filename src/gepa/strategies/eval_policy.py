@@ -66,8 +66,8 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     - Selection subset: Reserved for candidate selection (not used during optimization)
     - Evaluation subset: Used during optimization for evaluating candidates
     
-    The best program is determined by centering scores per task and selecting
-    the program with the highest average centered score.
+    The best program is determined by computing advantages per task and selecting
+    the program with the highest average advantage.
     """
 
     def __init__(self, selection_ratio: float = 0.5, seed: int | None = None):
@@ -130,24 +130,24 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         
         return task_means
 
-    def _compute_centered_scores(
+    def _compute_advantages(
         self, scores: dict[DataId, float], task_means: dict[DataId, float]
     ) -> list[float]:
-        """Compute centered scores for a program.
+        """Compute advantages for a program.
         
         Args:
             scores: Dictionary of task scores for a program.
             task_means: Dictionary mapping task IDs to their mean scores.
             
         Returns:
-            List of centered scores (score - mean for each task).
+            List of advantages (score - mean for each task).
         """
-        centered_scores = []
+        advantages = []
         for task_id, score in scores.items():
             if task_id in task_means:
-                centered_score = score - task_means[task_id]
-                centered_scores.append(centered_score)
-        return centered_scores
+                advantage = score - task_means[task_id]
+                advantages.append(advantage)
+        return advantages
 
     def get_eval_batch(
         self,
@@ -169,9 +169,9 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return self._evaluation_ids or []
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
-        """Pick the program with the highest average centered score.
+        """Pick the program with the highest average advantage.
         
-        Scores are centered per task by subtracting the mean score across all
+        Advantages are computed per task by subtracting the mean score across all
         programs for each task. This accounts for varying task difficulties.
         
         Args:
@@ -188,44 +188,44 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         if not task_means:
             return -1
         
-        # Calculate centered scores for each program
+        # Calculate advantages for each program
         best_idx = -1
-        best_centered_score = float("-inf")
+        best_advantage = float("-inf")
         best_coverage = -1
         
         for program_idx, scores in enumerate(state.prog_candidate_val_subscores):
             if not scores:
                 continue
             
-            # Calculate centered score for this program
-            centered_scores = self._compute_centered_scores(scores, task_means)
+            # Calculate advantage for this program
+            advantages = self._compute_advantages(scores, task_means)
             
-            if not centered_scores:
+            if not advantages:
                 continue
             
-            avg_centered_score = sum(centered_scores) / len(centered_scores)
-            coverage = len(centered_scores)
+            avg_advantage = sum(advantages) / len(advantages)
+            coverage = len(advantages)
             
-            # Select program with highest average centered score
+            # Select program with highest average advantage
             # Use coverage as tiebreaker
-            if avg_centered_score > best_centered_score or (
-                avg_centered_score == best_centered_score and coverage > best_coverage
+            if avg_advantage > best_advantage or (
+                avg_advantage == best_advantage and coverage > best_coverage
             ):
-                best_centered_score = avg_centered_score
+                best_advantage = avg_advantage
                 best_idx = program_idx
                 best_coverage = coverage
         
         return best_idx
 
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
-        """Return the average centered score of the program on the valset.
+        """Return the average advantage of the program on the valset.
         
         Args:
             program_idx: Index of the program to score.
             state: Current GEPA optimization state.
             
         Returns:
-            Average centered score for the program.
+            Average advantage for the program.
         """
         if program_idx < 0 or program_idx >= len(state.prog_candidate_val_subscores):
             return float("-inf")
@@ -237,13 +237,13 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         # Compute task means
         task_means = self._compute_task_means(state)
         
-        # Calculate centered scores for this program
-        centered_scores = self._compute_centered_scores(scores, task_means)
+        # Calculate advantages for this program
+        advantages = self._compute_advantages(scores, task_means)
         
-        if not centered_scores:
+        if not advantages:
             return float("-inf")
         
-        return sum(centered_scores) / len(centered_scores)
+        return sum(advantages) / len(advantages)
 
 
 __all__ = [

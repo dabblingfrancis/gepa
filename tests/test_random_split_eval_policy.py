@@ -87,8 +87,8 @@ def test_random_split_seed_reproducibility():
     assert batch1 == batch2
 
 
-def test_centered_scoring():
-    """Test that get_best_program uses centered scores."""
+def test_advantage_scoring():
+    """Test that get_best_program uses advantages."""
     policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
     state = MockState()
     
@@ -103,32 +103,32 @@ def test_centered_scoring():
     ]
     
     # Task means: 0: 0.9, 1: 0.1, 2: 0.5
-    # Centered scores:
+    # Advantages:
     # Program 0: [0.0, 0.0, 0.0] -> avg: 0.0
     # Program 1: [-0.1, 0.1, 0.1] -> avg: 0.033...
     # Program 2: [0.1, -0.1, -0.1] -> avg: -0.033...
     
     best_idx = policy.get_best_program(state)
-    assert best_idx == 1  # Program 1 has highest centered score
+    assert best_idx == 1  # Program 1 has highest advantage
 
 
-def test_centered_scoring_with_coverage():
+def test_advantage_scoring_with_coverage():
     """Test that coverage is used as tiebreaker."""
     policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
     state = MockState()
     
-    # Programs with same centered average but different coverage
+    # Programs with same advantage average but different coverage
     state.prog_candidate_val_subscores = [
-        {0: 1.0},  # Program 0: one task, centered score 0
-        {0: 1.0, 1: 1.0},  # Program 1: two tasks, centered score 0
+        {0: 1.0},  # Program 0: one task, advantage 0
+        {0: 1.0, 1: 1.0},  # Program 1: two tasks, advantage 0
     ]
     
     best_idx = policy.get_best_program(state)
-    assert best_idx == 1  # Program 1 has same centered score but more coverage
+    assert best_idx == 1  # Program 1 has same advantage but more coverage
 
 
 def test_get_valset_score():
-    """Test get_valset_score returns centered score."""
+    """Test get_valset_score returns advantage."""
     policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
     state = MockState()
     
@@ -138,7 +138,7 @@ def test_get_valset_score():
     ]
     
     # Task means: 0: 0.75, 1: 0.75
-    # Program 0 centered: [0.25, -0.25] -> avg: 0.0
+    # Program 0 advantage: [0.25, -0.25] -> avg: 0.0
     score = policy.get_valset_score(0, state)
     assert abs(score - 0.0) < 1e-6
     
