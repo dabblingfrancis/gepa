@@ -25,30 +25,30 @@ class MockState:
 
 def test_random_split_initialization():
     """Test RandomSplitEvaluationPolicy initialization."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
-    assert policy.selection_ratio == 0.5
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    assert policy.evaluation_ratio == 0.5
     
     # Test invalid ratio
-    with pytest.raises(ValueError, match="selection_ratio must be between 0 and 1"):
-        RandomSplitEvaluationPolicy(selection_ratio=0)
+    with pytest.raises(ValueError, match="evaluation_ratio must be between 0 and 1"):
+        RandomSplitEvaluationPolicy(evaluation_ratio=0)
     
-    with pytest.raises(ValueError, match="selection_ratio must be between 0 and 1"):
-        RandomSplitEvaluationPolicy(selection_ratio=1.0)
+    with pytest.raises(ValueError, match="evaluation_ratio must be between 0 and 1"):
+        RandomSplitEvaluationPolicy(evaluation_ratio=1.0)
     
-    with pytest.raises(ValueError, match="selection_ratio must be between 0 and 1"):
-        RandomSplitEvaluationPolicy(selection_ratio=1.5)
+    with pytest.raises(ValueError, match="evaluation_ratio must be between 0 and 1"):
+        RandomSplitEvaluationPolicy(evaluation_ratio=1.5)
 
 
 def test_random_split_batch_selection():
     """Test that get_eval_batch returns the evaluation subset."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     loader = ListDataLoader([{"id": i} for i in range(10)])
     state = MockState()
     
     # Get the evaluation batch
     batch = policy.get_eval_batch(loader, state)
     
-    # Should get approximately 50% of the data (evaluation subset when selection_ratio=0.5)
+    # Should get approximately 50% of the data (evaluation subset when evaluation_ratio=0.5)
     assert len(batch) == 5
     
     # Should return the same batch on subsequent calls (persistent split)
@@ -57,24 +57,24 @@ def test_random_split_batch_selection():
 
 
 def test_random_split_different_ratios():
-    """Test different selection ratios."""
+    """Test different evaluation ratios."""
     loader = ListDataLoader([{"id": i} for i in range(100)])
     state = MockState()
     
-    # Test 30% selection (70% evaluation)
-    policy_30 = RandomSplitEvaluationPolicy(selection_ratio=0.3, seed=42)
-    batch_30 = policy_30.get_eval_batch(loader, state)
-    assert len(batch_30) == 70  # Returns evaluation batch, which is 70%
-    
-    # Test 70% selection (30% evaluation)
-    policy_70 = RandomSplitEvaluationPolicy(selection_ratio=0.7, seed=42)
+    # Test 70% evaluation (30% selection)
+    policy_70 = RandomSplitEvaluationPolicy(evaluation_ratio=0.7, seed=42)
     batch_70 = policy_70.get_eval_batch(loader, state)
-    assert len(batch_70) == 30  # Returns evaluation batch, which is 30%
+    assert len(batch_70) == 70  # Returns evaluation batch, which is 70%
+    
+    # Test 30% evaluation (70% selection)
+    policy_30 = RandomSplitEvaluationPolicy(evaluation_ratio=0.3, seed=42)
+    batch_30 = policy_30.get_eval_batch(loader, state)
+    assert len(batch_30) == 30  # Returns evaluation batch, which is 30%
 
 
 def test_random_split_empty_loader():
     """Test behavior with empty data loader."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     loader = ListDataLoader([])
     state = MockState()
     
@@ -88,8 +88,8 @@ def test_random_split_seed_reproducibility():
     state1 = MockState()
     state2 = MockState()
     
-    policy1 = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
-    policy2 = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy1 = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    policy2 = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     
     batch1 = policy1.get_eval_batch(loader, state1)
     batch2 = policy2.get_eval_batch(loader, state2)
@@ -99,7 +99,7 @@ def test_random_split_seed_reproducibility():
 
 def test_advantage_scoring():
     """Test that get_best_program uses advantages."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     state = MockState()
     
     # Create scores where programs perform differently on different tasks
@@ -124,7 +124,7 @@ def test_advantage_scoring():
 
 def test_advantage_scoring_with_coverage():
     """Test that coverage is used as tiebreaker."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     state = MockState()
     
     # Programs with same advantage average but different coverage
@@ -139,7 +139,7 @@ def test_advantage_scoring_with_coverage():
 
 def test_get_valset_score():
     """Test get_valset_score returns raw average score."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     state = MockState()
     
     state.prog_candidate_val_subscores = [
@@ -168,7 +168,7 @@ def test_get_valset_score():
 
 def test_get_best_program_empty_state():
     """Test get_best_program with empty state."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     state = MockState()
     
     best_idx = policy.get_best_program(state)
@@ -177,7 +177,7 @@ def test_get_best_program_empty_state():
 
 def test_get_best_program_no_scores():
     """Test get_best_program when programs have no scores."""
-    policy = RandomSplitEvaluationPolicy(selection_ratio=0.5, seed=42)
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     state = MockState()
     
     state.prog_candidate_val_subscores = [{}, {}, {}]

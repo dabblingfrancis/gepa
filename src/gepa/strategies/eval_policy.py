@@ -70,17 +70,17 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     the program with the highest average advantage.
     """
 
-    def __init__(self, selection_ratio: float = 0.5, seed: int | None = None):
+    def __init__(self, evaluation_ratio: float = 0.5, seed: int | None = None):
         """Initialize the random split evaluation policy.
         
         Args:
-            selection_ratio: Fraction of validation set to use for selection (default 0.5).
+            evaluation_ratio: Fraction of validation set to use for evaluation (default 0.5).
                            Must be between 0 and 1.
             seed: Random seed for reproducible splits. If None, uses system random.
         """
-        if not 0 < selection_ratio < 1:
-            raise ValueError("selection_ratio must be between 0 and 1")
-        self.selection_ratio = selection_ratio
+        if not 0 < evaluation_ratio < 1:
+            raise ValueError("evaluation_ratio must be between 0 and 1")
+        self.evaluation_ratio = evaluation_ratio
         self.rng = random.Random(seed)
         self._selection_ids: list[DataId] | None = None
         self._evaluation_ids: list[DataId] | None = None
@@ -100,9 +100,9 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         shuffled_ids = all_ids.copy()
         self.rng.shuffle(shuffled_ids)
         
-        split_point = int(len(shuffled_ids) * self.selection_ratio)
-        self._selection_ids = shuffled_ids[:split_point]
-        self._evaluation_ids = shuffled_ids[split_point:]
+        split_point = int(len(shuffled_ids) * self.evaluation_ratio)
+        self._evaluation_ids = shuffled_ids[:split_point]
+        self._selection_ids = shuffled_ids[split_point:]
 
     def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
         """Compute mean score per task across all programs.
