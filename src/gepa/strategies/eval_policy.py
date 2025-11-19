@@ -63,11 +63,11 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that randomly splits validation set into selection and evaluation subsets.
     
     The validation set is split into two subsets:
-    - Selection subset: Reserved for candidate selection (not used during optimization)
+    - Selection subset: Used for candidate selection (computing advantages and picking best program)
     - Evaluation subset: Used during optimization for evaluating candidates
     
-    The best program is determined by computing advantages per task and selecting
-    the program with the highest average advantage.
+    The best program is determined by computing advantages per task (using selection subset only)
+    and selecting the program with the highest average advantage.
     """
 
     def __init__(self, evaluation_ratio: float = 0.5, seed: int | None = None):
@@ -101,26 +101,33 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         self.rng.shuffle(shuffled_ids)
         
         split_point = int(len(shuffled_ids) * self.evaluation_ratio)
+        
+        # Ensure at least 1 evaluation item (unless validation set is empty)
+        if split_point == 0 and len(shuffled_ids) > 0:
+            split_point = 1
+        
         self._evaluation_ids = shuffled_ids[:split_point]
         self._selection_ids = shuffled_ids[split_point:]
 
     def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
-        """Compute mean score per task across all programs.
+        """Compute mean score per task across all programs for selection subset only.
         
         Args:
             state: Current GEPA optimization state.
             
         Returns:
-            Dictionary mapping task IDs to their mean scores across all programs.
+            Dictionary mapping task IDs (from selection subset) to their mean scores 
+            across all programs.
         """
-        # Collect all task IDs that have been evaluated
-        all_task_ids: set[DataId] = set()
-        for scores in state.prog_candidate_val_subscores:
-            all_task_ids.update(scores.keys())
+        if self._selection_ids is None:
+            return {}
         
-        # Calculate mean score per task across all programs
+        # Only consider selection IDs for computing task means
+        selection_ids_set = set(self._selection_ids)
+        
+        # Calculate mean score per task across all programs (for selection tasks only)
         task_means: dict[DataId, float] = {}
-        for task_id in all_task_ids:
+        for task_id in selection_ids_set:
             task_scores = []
             for scores in state.prog_candidate_val_subscores:
                 if task_id in scores:
@@ -169,10 +176,11 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return self._evaluation_ids or []
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
-        """Pick the program with the highest average advantage.
+        """Pick the program with the highest average advantage on the selection subset.
         
-        Advantages are computed per task by subtracting the mean score across all
-        programs for each task. This accounts for varying task difficulties.
+        Advantages are computed per task (using selection subset only) by subtracting 
+        the mean score across all programs for each task. This accounts for varying 
+        task difficulties.
         
         Args:
             state: Current GEPA optimization state.
@@ -222,14 +230,14 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return state.get_program_average_val_subset(program_idx)[0]
 
     def get_advantage(self, program_idx: ProgramIdx, state: GEPAState) -> float:
-        """Return the average advantage of the program on the valset.
+        """Return the average advantage of the program on the selection subset.
         
         Args:
             program_idx: Index of the program to score.
             state: Current GEPA optimization state.
             
         Returns:
-            Average advantage for the program.
+            Average advantage for the program on the selection subset.
         """
         if program_idx < 0 or program_idx >= len(state.prog_candidate_val_subscores):
             return float("-inf")
@@ -238,10 +246,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         if not scores:
             return float("-inf")
         
-        # Compute task means
+        # Compute task means (for selection subset only)
         task_means = self._compute_task_means(state)
         
-        # Calculate advantages for this program
+        # Calculate advantages for this program (only for selection subset tasks)
         advantages = self._compute_advantages(scores, task_means)
         
         if not advantages:
