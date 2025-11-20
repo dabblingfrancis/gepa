@@ -183,11 +183,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         return self._evaluation_ids or []
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
-        """Pick the program with the highest average advantage on the selection subset.
+        """Pick the program with the highest average advantage on the valset.
         
-        Advantages are computed per task (using selection subset only) by subtracting 
-        the mean score across all programs for each task. This accounts for varying 
-        task difficulties.
+        Advantages are computed per task by subtracting the mean score across all 
+        programs for each task. This accounts for varying task difficulties.
         
         Args:
             state: Current GEPA optimization state.
