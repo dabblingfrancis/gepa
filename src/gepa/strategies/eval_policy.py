@@ -91,10 +91,12 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             return
         
         all_ids = list(loader.all_ids())
-        if not all_ids:
-            self._selection_ids = []
-            self._evaluation_ids = []
-            return
+        
+        # Require at least 2 validation items for RandomSplitEvaluationPolicy
+        if len(all_ids) < 2:
+            raise ValueError(
+                f"RandomSplitEvaluationPolicy requires at least 2 validation items, got {len(all_ids)}"
+            )
         
         # Shuffle and split
         shuffled_ids = all_ids.copy()
@@ -102,15 +104,14 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         
         split_point = int(len(shuffled_ids) * self.evaluation_ratio)
         
-        # Ensure at least 1 evaluation item and 1 selection item (when validation set has 2+ items)
-        if len(shuffled_ids) >= 2:
-            if split_point == 0:
-                split_point = 1
-            elif split_point >= len(shuffled_ids):
-                split_point = len(shuffled_ids) - 1
-        elif len(shuffled_ids) == 1:
-            # With only 1 item, use it for evaluation
+        # Ensure at least 1 evaluation item and 1 selection item
+        # Since evaluation_ratio is strictly between 0 and 1, and len(shuffled_ids) >= 2:
+        # - split_point can be 0 (when evaluation_ratio is very small)
+        # - split_point will always be < len(shuffled_ids) (at most len-1)
+        if split_point == 0:
             split_point = 1
+        elif split_point == len(shuffled_ids):
+            split_point = len(shuffled_ids) - 1
         
         self._evaluation_ids = shuffled_ids[:split_point]
         self._selection_ids = shuffled_ids[split_point:]

@@ -73,13 +73,13 @@ def test_random_split_different_ratios():
 
 
 def test_random_split_empty_loader():
-    """Test behavior with empty data loader."""
+    """Test that empty data loader raises ValueError."""
     policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
     loader = ListDataLoader([])
     state = MockState()
     
-    batch = policy.get_eval_batch(loader, state)
-    assert batch == []
+    with pytest.raises(ValueError, match="requires at least 2 validation items"):
+        policy.get_eval_batch(loader, state)
 
 
 def test_random_split_minimum_evaluation_size():
@@ -289,16 +289,18 @@ def test_minimum_split_sizes_with_two_items():
     assert len(policy._selection_ids) == 1
 
 
-def test_single_item_validation_set():
-    """Test that with 1 validation item, it goes to evaluation (no selection possible)."""
+def test_insufficient_validation_items():
+    """Test that RandomSplitEvaluationPolicy requires at least 2 validation items."""
     policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
-    loader = ListDataLoader([{"id": 0}])
     state = MockState()
     
-    # Initialize the split
-    policy.get_eval_batch(loader, state)
+    # Test with 0 items
+    loader = ListDataLoader([])
+    with pytest.raises(ValueError, match="requires at least 2 validation items"):
+        policy.get_eval_batch(loader, state)
     
-    # With 1 item, it should go to evaluation
-    assert len(policy._evaluation_ids) == 1
-    assert len(policy._selection_ids) == 0
+    # Test with 1 item
+    loader = ListDataLoader([{"id": 0}])
+    with pytest.raises(ValueError, match="requires at least 2 validation items"):
+        policy.get_eval_batch(loader, state)
 
