@@ -89,10 +89,21 @@ class ReflectiveMutationProposer(ProposeNewCandidate[DataId]):
             )["new_instruction"]
         return new_texts
 
-    def propose(self, state: GEPAState) -> CandidateProposal | None:
+    def propose(self, state: GEPAState, val_evaluation_policy=None) -> CandidateProposal | None:
         i = state.i + 1
 
-        curr_prog_id = self.candidate_selector.select_candidate_idx(state)
+        # Filter pareto front if evaluation policy supports it (e.g., RandomSplitEvaluationPolicy)
+        # This ensures candidate selection only considers the selection subset
+        state_for_selection = state
+        if val_evaluation_policy is not None and hasattr(val_evaluation_policy, 'filter_pareto_front'):
+            # Create a shallow copy of state with filtered pareto front
+            import copy
+            state_for_selection = copy.copy(state)
+            state_for_selection.program_at_pareto_front_valset = val_evaluation_policy.filter_pareto_front(
+                state.program_at_pareto_front_valset
+            )
+
+        curr_prog_id = self.candidate_selector.select_candidate_idx(state_for_selection)
         curr_prog = state.program_candidates[curr_prog_id]
         state.full_program_trace[-1]["selected_program_candidate"] = curr_prog_id
         self.logger.log(
