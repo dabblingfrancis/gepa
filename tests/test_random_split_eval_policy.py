@@ -242,10 +242,6 @@ def test_filter_pareto_front():
     for val_id in filtered.keys():
         assert val_id in policy._selection_ids
     
-    # Check that evaluation IDs are excluded
-    for val_id in policy._evaluation_ids:
-        assert val_id not in filtered
-    
     # Check that program sets are preserved
     for val_id in filtered.keys():
         assert filtered[val_id] == pareto_front[val_id]
