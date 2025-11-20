@@ -292,9 +292,14 @@ class MergeProposer(ProposeNewCandidate[DataId]):
 
         pareto_front_programs = state.program_at_pareto_front_valset
         
-        # Filter pareto front if evaluation policy supports it (e.g., RandomSplitEvaluationPolicy)
-        if val_evaluation_policy is not None and hasattr(val_evaluation_policy, 'filter_pareto_front'):
-            pareto_front_programs = val_evaluation_policy.filter_pareto_front(pareto_front_programs)
+        # Filter pareto front to selection subset if evaluation policy supports it
+        if val_evaluation_policy is not None and hasattr(val_evaluation_policy, 'get_selection_batch'):
+            selection_ids = set(val_evaluation_policy.get_selection_batch(self.valset, state))
+            pareto_front_programs = {
+                val_id: program_ids 
+                for val_id, program_ids in pareto_front_programs.items() 
+                if val_id in selection_ids
+            }
         
         merge_candidates = find_dominator_programs(pareto_front_programs, state.program_full_scores_val_set)
         merge_output = sample_and_attempt_merge_programs_by_common_predictors(

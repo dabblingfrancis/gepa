@@ -211,6 +211,51 @@ def test_get_best_program_no_scores():
     assert best_idx == -1
 
 
+def test_get_selection_batch():
+    """Test that get_selection_batch returns selection subset IDs."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    loader = ListDataLoader([{"id": i} for i in range(10)])
+    state = MockState()
+    
+    # Get selection batch
+    selection_batch = policy.get_selection_batch(loader, state)
+    
+    # Verify that selection batch contains 5 items (50% of 10)
+    assert len(selection_batch) == 5
+    
+    # Verify selection IDs don't overlap with evaluation IDs
+    eval_batch = policy.get_eval_batch(loader, state)
+    assert set(selection_batch).isdisjoint(set(eval_batch))
+    
+    # Verify combined batches equal total validation set
+    assert len(set(selection_batch) | set(eval_batch)) == 10
+
+
+def test_get_selection_batch():
+    """Test that get_selection_batch returns selection subset IDs."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    loader = ListDataLoader([{"id": i} for i in range(10)])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # Get selection batch
+    selection_ids = policy.get_selection_batch(loader, state)
+    
+    # Check that selection IDs match the internal selection subset
+    assert len(selection_ids) == len(policy._selection_ids)
+    assert set(selection_ids) == set(policy._selection_ids)
+    
+    # Verify they are disjoint from evaluation IDs
+    eval_ids = policy.get_eval_batch(loader, state)
+    assert set(selection_ids).isdisjoint(set(eval_ids))
+    
+    # Verify they cover all validation IDs
+    all_ids = set(loader.all_ids())
+    assert set(selection_ids) | set(eval_ids) == all_ids
+
+
 def test_filter_pareto_front():
     """Test that filter_pareto_front only includes selection IDs."""
     policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)

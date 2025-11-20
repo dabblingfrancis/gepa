@@ -32,6 +32,16 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
         """Return the score of the program on the valset"""
         ...
 
+    def get_selection_batch(
+        self, loader: DataLoader[DataId, DataInst], state: GEPAState
+    ) -> list[DataId]:
+        """Select validation IDs to use for candidate selection (e.g., pareto front filtering).
+        
+        By default, returns all validation IDs. Policies like RandomSplitEvaluationPolicy
+        override this to return only the selection subset.
+        """
+        return list(loader.all_ids())
+
 
 class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that evaluates all validation instances every time."""
@@ -40,6 +50,26 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
     ) -> list[DataId]:
         """Always return the full ordered list of validation ids."""
+        return list(loader.all_ids())
+    
+    def get_selection_batch(
+        self,
+        loader: DataLoader[DataId, DataInst],
+        state: GEPAState,
+        target_program_idx: ProgramIdx | None = None,
+    ) -> list[DataId]:
+        """Return all validation IDs for candidate selection.
+        
+        For FullEvaluationPolicy, the selection batch is the same as the full validation set.
+        
+        Args:
+            loader: Data loader containing validation examples.
+            state: Current GEPA optimization state.
+            target_program_idx: Optional program index (unused in this implementation).
+            
+        Returns:
+            List of all validation IDs.
+        """
         return list(loader.all_ids())
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
@@ -57,6 +87,12 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
         """Return the score of the program on the valset"""
         return state.get_program_average_val_subset(program_idx)[0]
+
+    def get_selection_batch(
+        self, loader: DataLoader[DataId, DataInst], state: GEPAState
+    ) -> list[DataId]:
+        """Return all validation IDs for candidate selection."""
+        return list(loader.all_ids())
 
 
 class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
@@ -261,20 +297,24 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         
         return sum(advantages) / len(advantages)
     
-    def filter_pareto_front(self, pareto_front: dict[DataId, set[ProgramIdx]]) -> dict[DataId, set[ProgramIdx]]:
-        """Filter pareto front to only include selection subset validation IDs.
-        
-        This ensures that candidate selection (e.g., for merging) only considers
-        the pareto front for the selection subset, not the evaluation subset.
+    def get_selection_batch(
+        self,
+        loader: DataLoader[DataId, DataInst],
+        state: GEPAState,
+        target_program_idx: ProgramIdx | None = None,
+    ) -> list[DataId]:
+        """Return the selection subset for candidate selection (pareto front filtering).
         
         Args:
-            pareto_front: Full pareto front mapping validation IDs to program indices.
+            loader: Data loader containing validation examples.
+            state: Current GEPA optimization state.
+            target_program_idx: Optional program index (unused in this implementation).
             
         Returns:
-            Filtered pareto front containing only selection subset validation IDs.
+            List of validation IDs in the selection subset.
         """
-        selection_ids_set = set(self._selection_ids)
-        return {val_id: programs for val_id, programs in pareto_front.items() if val_id in selection_ids_set}
+        self._initialize_split(loader)
+        return self._selection_ids or []
 
 
 __all__ = [
