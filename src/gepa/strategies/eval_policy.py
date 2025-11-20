@@ -107,9 +107,7 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         split_point = int(len(shuffled_ids) * self.evaluation_ratio)
         
         # Ensure at least 1 evaluation item and 1 selection item
-        # Since evaluation_ratio is strictly between 0 and 1, and len(shuffled_ids) >= 2:
-        # - split_point can be 0 (when evaluation_ratio is very small)
-        # - split_point will always be < len(shuffled_ids) (at most len-1)
+        # Ensure at least 1 item in both subsets
         if split_point == 0:
             split_point = 1
         elif split_point == len(shuffled_ids):
