@@ -117,24 +117,24 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         self._selection_ids = shuffled_ids[split_point:]
 
     def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
-        """Compute mean score per task across all programs for selection subset only.
+        """Compute mean score per task across all programs on the validation set.
         
         Args:
             state: Current GEPA optimization state.
             
         Returns:
-            Dictionary mapping task IDs (from selection subset) to their mean scores 
-            across all programs.
+            Dictionary mapping task IDs to their mean scores across all programs.
         """
-        if self._selection_ids is None:
-            return {}
-        
-        # Only consider selection IDs for computing task means
-        selection_ids_set = set(self._selection_ids)
-        
-        # Calculate mean score per task across all programs (for selection tasks only)
+        # Calculate mean score per task across all programs (for all validation tasks)
         task_means: dict[DataId, float] = {}
-        for task_id in selection_ids_set:
+        
+        # Get all unique task IDs from all programs
+        all_task_ids = set()
+        for scores in state.prog_candidate_val_subscores:
+            all_task_ids.update(scores.keys())
+        
+        # Compute mean for each task
+        for task_id in all_task_ids:
             task_scores = []
             for scores in state.prog_candidate_val_subscores:
                 if task_id in scores:
