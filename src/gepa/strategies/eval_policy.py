@@ -102,8 +102,14 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         
         split_point = int(len(shuffled_ids) * self.evaluation_ratio)
         
-        # Ensure at least 1 evaluation item (unless validation set is empty)
-        if split_point == 0 and len(shuffled_ids) > 0:
+        # Ensure at least 1 evaluation item and 1 selection item (when validation set has 2+ items)
+        if len(shuffled_ids) >= 2:
+            if split_point == 0:
+                split_point = 1
+            elif split_point >= len(shuffled_ids):
+                split_point = len(shuffled_ids) - 1
+        elif len(shuffled_ids) == 1:
+            # With only 1 item, use it for evaluation
             split_point = 1
         
         self._evaluation_ids = shuffled_ids[:split_point]

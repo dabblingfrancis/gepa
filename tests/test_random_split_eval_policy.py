@@ -246,3 +246,59 @@ def test_filter_pareto_front():
     for val_id in filtered.keys():
         assert filtered[val_id] == pareto_front[val_id]
 
+
+def test_minimum_split_sizes_with_high_evaluation_ratio():
+    """Test that we always have at least 1 selection item when validation set has 2+ items."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.99, seed=42)
+    loader = ListDataLoader([{"id": i} for i in range(10)])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # With evaluation_ratio=0.99 and 10 items, we should have 9 evaluation and 1 selection
+    assert len(policy._evaluation_ids) == 9
+    assert len(policy._selection_ids) == 1
+
+
+def test_minimum_split_sizes_with_low_evaluation_ratio():
+    """Test that we always have at least 1 evaluation item when validation set has 2+ items."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.01, seed=42)
+    loader = ListDataLoader([{"id": i} for i in range(10)])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # With evaluation_ratio=0.01 and 10 items, we should have 1 evaluation and 9 selection
+    assert len(policy._evaluation_ids) == 1
+    assert len(policy._selection_ids) == 9
+
+
+def test_minimum_split_sizes_with_two_items():
+    """Test split behavior with exactly 2 validation items."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    loader = ListDataLoader([{"id": 0}, {"id": 1}])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # With 2 items, we should have 1 for evaluation and 1 for selection
+    assert len(policy._evaluation_ids) == 1
+    assert len(policy._selection_ids) == 1
+
+
+def test_single_item_validation_set():
+    """Test that with 1 validation item, it goes to evaluation (no selection possible)."""
+    policy = RandomSplitEvaluationPolicy(evaluation_ratio=0.5, seed=42)
+    loader = ListDataLoader([{"id": 0}])
+    state = MockState()
+    
+    # Initialize the split
+    policy.get_eval_batch(loader, state)
+    
+    # With 1 item, it should go to evaluation
+    assert len(policy._evaluation_ids) == 1
+    assert len(policy._selection_ids) == 0
+
