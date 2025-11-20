@@ -61,13 +61,15 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
 
 class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that randomly splits validation set into selection and evaluation subsets.
-    
-    The validation set is split into two subsets:
-    - Selection subset: Used for candidate selection (computing advantages and picking best program)
-    - Evaluation subset: Used during optimization for evaluating candidates
-    
-    The best program is determined by computing advantages per task (using selection subset only)
-    and selecting the program with the highest average advantage.
+
+    With each iteration, the valset is randomly split into two subsets:
+    - Selection subset: Used to filter the valset pareto frontier before selecting a candidate
+    - Evaluation subset: Used to evaluate the mutated prompt (if the prompt revision was successful on trainset)
+
+    The split prevents lucky prompts from dominating the pareto frontier, as they need to generalize to a different part of the valset. 
+
+    The best program is determined by computing advantages (GRPO-style) per task on the valset
+    and selecting the program with the highest average advantage. Using advantages instead of raw scores removes the possibility that a program was lucky to be evaluated on an easier subset of the valset. 
     """
 
     def __init__(self, evaluation_ratio: float = 0.5, seed: int | None = None):
