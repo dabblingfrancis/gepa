@@ -110,8 +110,6 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         # Ensure at least 1 item in both subsets
         if split_point == 0:
             split_point = 1
-        elif split_point == len(shuffled_ids):
-            split_point = len(shuffled_ids) - 1
         
         self._evaluation_ids = shuffled_ids[:split_point]
         self._selection_ids = shuffled_ids[split_point:]
