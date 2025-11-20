@@ -94,16 +94,15 @@ class ReflectiveMutationProposer(ProposeNewCandidate[DataId]):
 
         # Filter pareto front if evaluation policy supports it (e.g., RandomSplitEvaluationPolicy)
         # This ensures candidate selection only considers the selection subset
-        state_for_selection = state
+        pareto_front_programs = state.program_at_pareto_front_valset
         if val_evaluation_policy is not None and hasattr(val_evaluation_policy, 'filter_pareto_front'):
-            # Create a shallow copy of state with filtered pareto front
-            import copy
-            state_for_selection = copy.copy(state)
-            state_for_selection.program_at_pareto_front_valset = val_evaluation_policy.filter_pareto_front(
-                state.program_at_pareto_front_valset
-            )
-
-        curr_prog_id = self.candidate_selector.select_candidate_idx(state_for_selection)
+            pareto_front_programs = val_evaluation_policy.filter_pareto_front(pareto_front_programs)
+        
+        # Temporarily replace pareto front for candidate selection
+        original_pareto_front = state.program_at_pareto_front_valset
+        state.program_at_pareto_front_valset = pareto_front_programs
+        curr_prog_id = self.candidate_selector.select_candidate_idx(state)
+        state.program_at_pareto_front_valset = original_pareto_front
         curr_prog = state.program_candidates[curr_prog_id]
         state.full_program_trace[-1]["selected_program_candidate"] = curr_prog_id
         self.logger.log(
