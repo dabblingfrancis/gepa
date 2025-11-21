@@ -32,15 +32,17 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
         """Return the score of the program on the valset"""
         ...
 
+    @abstractmethod
     def get_selection_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState
     ) -> list[DataId]:
-        """Select validation IDs to use for candidate selection (e.g., pareto front filtering).
+        """Select validation IDs to use for candidate selection.
         
-        By default, returns all validation IDs. Policies like RandomSplitEvaluationPolicy
-        override this to return only the selection subset.
+        Returns validation IDs that should be used for selecting candidates.
+        Policies like RandomSplitEvaluationPolicy return only the selection subset,
+        while FullEvaluationPolicy returns all validation IDs.
         """
-        return list(loader.all_ids())
+        raise NotImplementedError
 
 
 class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
@@ -88,21 +90,22 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         """Return the score of the program on the valset"""
         return state.get_program_average_val_subset(program_idx)[0]
 
+    @abc.abstractmethod
     def get_selection_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState
     ) -> list[DataId]:
-        """Return all validation IDs for candidate selection."""
-        return list(loader.all_ids())
+        """Return validation IDs to use for candidate selection."""
+        pass
 
 
 class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that randomly splits validation set into selection and evaluation subsets.
 
     With each iteration, the valset is randomly split into two subsets:
-    - Selection subset: Used to filter the valset pareto frontier before selecting a candidate
+    - Selection subset: Used for candidate selection
     - Evaluation subset: Used to evaluate the mutated prompt (if the prompt revision was successful on trainset)
 
-    The split prevents lucky prompts from dominating the pareto frontier, as they need to generalize to a different part of the valset. 
+    The split prevents lucky prompts from dominating, as they need to generalize to a different part of the valset. 
 
     The best program is determined by computing advantages (GRPO-style) per task on the valset
     and selecting the program with the highest average advantage. Using advantages instead of raw scores removes the possibility that a program was lucky to be evaluated on an easier subset of the valset. 
@@ -303,7 +306,7 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         state: GEPAState,
         target_program_idx: ProgramIdx | None = None,
     ) -> list[DataId]:
-        """Return the selection subset for candidate selection (pareto front filtering).
+        """Return the selection subset for candidate selection.
         
         Args:
             loader: Data loader containing validation examples.
