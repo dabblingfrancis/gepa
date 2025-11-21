@@ -16,6 +16,13 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
     """Strategy for choosing validation ids to evaluate and identifying best programs for validation instances."""
 
     @abstractmethod
+    def get_selection_batch(
+        self, loader: DataLoader[DataId, DataInst], state: GEPAState
+    ) -> list[DataId]:
+        """Select validation IDs to use for candidate selection"""
+        ...
+
+    @abstractmethod
     def get_eval_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
     ) -> list[DataId]:
@@ -32,28 +39,10 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
         """Return the score of the program on the valset"""
         ...
 
-    @abstractmethod
-    def get_selection_batch(
-        self, loader: DataLoader[DataId, DataInst], state: GEPAState
-    ) -> list[DataId]:
-        """Select validation IDs to use for candidate selection.
-        
-        Returns validation IDs that should be used for selecting candidates.
-        Policies like RandomSplitEvaluationPolicy return only the selection subset,
-        while FullEvaluationPolicy returns all validation IDs.
-        """
-        raise NotImplementedError
-
 
 class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that evaluates all validation instances every time."""
 
-    def get_eval_batch(
-        self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
-    ) -> list[DataId]:
-        """Always return the full ordered list of validation ids."""
-        return list(loader.all_ids())
-    
     def get_selection_batch(
         self,
         loader: DataLoader[DataId, DataInst],
@@ -74,6 +63,12 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         """
         return list(loader.all_ids())
 
+    def get_eval_batch(
+        self, loader: DataLoader[DataId, DataInst], state: GEPAState, target_program_idx: ProgramIdx | None = None
+    ) -> list[DataId]:
+        """Always return the full ordered list of validation ids."""
+        return list(loader.all_ids())
+    
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
         """Pick the program whose evaluated validation scores achieve the highest average."""
         best_idx, best_score, best_coverage = -1, float("-inf"), -1
@@ -89,13 +84,6 @@ class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
         """Return the score of the program on the valset"""
         return state.get_program_average_val_subset(program_idx)[0]
-
-    @abc.abstractmethod
-    def get_selection_batch(
-        self, loader: DataLoader[DataId, DataInst], state: GEPAState
-    ) -> list[DataId]:
-        """Return validation IDs to use for candidate selection."""
-        pass
 
 
 class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
@@ -146,7 +134,6 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         split_point = int(len(shuffled_ids) * self.evaluation_ratio)
         
         # Ensure at least 1 evaluation item and 1 selection item
-        # Ensure at least 1 item in both subsets
         if split_point == 0:
             split_point = 1
         
@@ -199,6 +186,25 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
                 advantage = score - task_means[task_id]
                 advantages.append(advantage)
         return advantages
+    
+    def get_selection_batch(
+        self,
+        loader: DataLoader[DataId, DataInst],
+        state: GEPAState,
+        target_program_idx: ProgramIdx | None = None,
+    ) -> list[DataId]:
+        """Return the selection subset for candidate selection.
+        
+        Args:
+            loader: Data loader containing validation examples.
+            state: Current GEPA optimization state.
+            target_program_idx: Optional program index (unused in this implementation).
+            
+        Returns:
+            List of validation IDs in the selection subset.
+        """
+        self._initialize_split(loader)
+        return self._selection_ids 
 
     def get_eval_batch(
         self,
@@ -217,7 +223,7 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             List of validation IDs in the evaluation subset.
         """
         self._initialize_split(loader)
-        return self._evaluation_ids or []
+        return self._evaluation_ids 
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
         """Pick the program with the highest average advantage on the valset.
@@ -299,25 +305,6 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
             return float("-inf")
         
         return sum(advantages) / len(advantages)
-    
-    def get_selection_batch(
-        self,
-        loader: DataLoader[DataId, DataInst],
-        state: GEPAState,
-        target_program_idx: ProgramIdx | None = None,
-    ) -> list[DataId]:
-        """Return the selection subset for candidate selection.
-        
-        Args:
-            loader: Data loader containing validation examples.
-            state: Current GEPA optimization state.
-            target_program_idx: Optional program index (unused in this implementation).
-            
-        Returns:
-            List of validation IDs in the selection subset.
-        """
-        self._initialize_split(loader)
-        return self._selection_ids or []
 
 
 __all__ = [
