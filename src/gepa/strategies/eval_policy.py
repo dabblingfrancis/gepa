@@ -92,11 +92,13 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     With each iteration, the valset is randomly split into two subsets:
     - Selection subset: Used for candidate selection
     - Evaluation subset: Used to evaluate the mutated prompt (if the prompt revision was successful on trainset)
+    The evaluation ratio sets the tradeoff between selection noise and evaluation noise. 
 
-    The split prevents lucky prompts from dominating, as they need to generalize to a different part of the valset. 
+    The split reduces overfitting, as each program needs to generalize to a different part of the valset. 
 
     The best program is determined by computing advantages (GRPO-style) per task on the valset
-    and selecting the program with the highest average advantage. Using advantages instead of raw scores removes the possibility that a program was lucky to be evaluated on an easier subset of the valset. 
+    and selecting the program with the highest average advantage. 
+    Using advantages instead of raw scores removes the effect of task difficulty. 
     """
 
     def __init__(self, evaluation_ratio: float = 0.5, seed: int | None = None):
@@ -104,41 +106,45 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         
         Args:
             evaluation_ratio: Fraction of validation set to use for evaluation (default 0.5).
-                           Must be between 0 and 1.
+                           Must be strictly between 0 and 1.
             seed: Random seed for reproducible splits. If None, uses system random.
         """
         if not 0 < evaluation_ratio < 1:
-            raise ValueError("evaluation_ratio must be between 0 and 1")
+            raise ValueError("evaluation_ratio must be strictly between 0 and 1")
         self.evaluation_ratio = evaluation_ratio
-        self.rng = random.Random(seed)
+        self.seed = seed
         self._selection_ids: list[DataId] | None = None
         self._evaluation_ids: list[DataId] | None = None
+        self._current_iteration: int | None = None
 
-    def _initialize_split(self, loader: DataLoader[DataId, DataInst]) -> None:
-        """Initialize the random split if not already done."""
-        if self._selection_ids is not None:
-            return
-        
+    def _initialize_split(self, loader: DataLoader[DataId, DataInst], state_iteration: int) -> None:
+        """Initialize (or reinitialize) the random split.
+
+        Each new state iteration leads to a fresh split.
+        """
+        if state_iteration == self._current_iteration:
+            return     
+
         all_ids = list(loader.all_ids())
-        
-        # Require at least 2 validation items for RandomSplitEvaluationPolicy
+
+        # Require at least 2 validation items
         if len(all_ids) < 2:
             raise ValueError(
                 f"RandomSplitEvaluationPolicy requires at least 2 validation items, got {len(all_ids)}"
             )
         
+        if self.seed is not None: 
+            rng = random.Random(self.seed + state_iteration)
+        else: 
+            rng = random.Random(state_iteration)
+        
         # Shuffle and split
-        shuffled_ids = all_ids.copy()
-        self.rng.shuffle(shuffled_ids)
-        
-        split_point = int(len(shuffled_ids) * self.evaluation_ratio)
-        
-        # Ensure at least 1 evaluation item and 1 selection item
-        if split_point == 0:
-            split_point = 1
-        
-        self._evaluation_ids = shuffled_ids[:split_point]
-        self._selection_ids = shuffled_ids[split_point:]
+        rng.shuffle(all_ids)
+        n_eval = max(1, int(len(all_ids) * self.evaluation_ratio)) # at least 1 evaluation item
+        self._evaluation_ids = all_ids[:n_eval]
+        self._selection_ids = all_ids[n_eval:]
+
+        self._current_iteration = state_iteration
 
     def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
         """Compute mean score per task across all programs on the validation set.
@@ -203,9 +209,10 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         Returns:
             List of validation IDs in the selection subset.
         """
-        self._initialize_split(loader)
-        return self._selection_ids 
-
+        self._initialize_split(loader, state_iteration=state.i)
+        assert self._selection_ids is not None, "Selection IDs not initialized."
+        return self._selection_ids
+    
     def get_eval_batch(
         self,
         loader: DataLoader[DataId, DataInst],
@@ -222,8 +229,9 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         Returns:
             List of validation IDs in the evaluation subset.
         """
-        self._initialize_split(loader)
-        return self._evaluation_ids 
+        self._initialize_split(loader, state_iteration=state.i)
+        assert self._evaluation_ids is not None, "Evaluation IDs not initialized."
+        return self._evaluation_ids
 
     def get_best_program(self, state: GEPAState) -> ProgramIdx:
         """Pick the program with the highest average advantage on the valset.
