@@ -36,13 +36,12 @@ def log_detailed_metrics_after_discovering_new_program(
     logger.log(f"Iteration {gepa_state.i + 1}: Val aggregate for new program: {agg_valset_score_new_program}")
     
     # Log advantage if the policy supports it (e.g., RandomSplitEvaluationPolicy)
-    if hasattr(val_evaluation_policy, 'get_advantage'):
-        advantage = val_evaluation_policy.get_advantage(new_program_idx, gepa_state)
-        logger.log(f"Iteration {gepa_state.i + 1}: Advantage for new program: {advantage}")
-        
-        # Also log the best advantage on valset
-        best_advantage_on_valset = val_evaluation_policy.get_advantage(best_prog_per_agg_val_score, gepa_state)
-        logger.log(f"Iteration {gepa_state.i + 1}: Best advantage on valset: {best_advantage_on_valset}")
+    advantage = val_evaluation_policy.get_valset_advantage(new_program_idx, gepa_state)
+    logger.log(f"Iteration {gepa_state.i + 1}: Advantage for new program: {advantage}")
+    
+    # Also log the best advantage on valset
+    best_advantage_on_valset = val_evaluation_policy.get_valset_advantage(best_prog_per_agg_val_score, gepa_state)
+    logger.log(f"Iteration {gepa_state.i + 1}: Best advantage on valset: {best_advantage_on_valset}")
     
     logger.log(f"Iteration {gepa_state.i + 1}: Individual valset scores for new program: {valset_subscores}")
     logger.log(f"Iteration {gepa_state.i + 1}: New valset pareto front scores: {gepa_state.pareto_front_valset}")
@@ -83,7 +82,7 @@ def log_detailed_metrics_after_discovering_new_program(
     }
     
     # Add advantage if the policy supports it
-    if hasattr(val_evaluation_policy, 'get_advantage'):
+    if hasattr(val_evaluation_policy, 'get_valset_advantage'):
         metrics["advantage_new_program"] = advantage
         metrics["best_advantage_on_valset"] = best_advantage_on_valset
     

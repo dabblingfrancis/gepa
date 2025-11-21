@@ -19,7 +19,7 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
     def get_selection_batch(
         self, loader: DataLoader[DataId, DataInst], state: GEPAState
     ) -> list[DataId]:
-        """Select validation IDs to use for candidate selection"""
+        """Select examples for candidate selection"""
         ...
 
     @abstractmethod
@@ -39,6 +39,67 @@ class EvaluationPolicy(Protocol[DataId, DataInst]):  # type: ignore
         """Return the score of the program on the valset"""
         ...
 
+    def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
+        """Compute mean score per task across all candidate programs.
+
+        This helper is shared across evaluation policies to normalize scores
+        per task (removes task difficulty effects).
+        """
+        task_means: dict[DataId, float] = {}
+
+        # Collect all unique task ids
+        all_task_ids = set()
+        for scores in state.prog_candidate_val_subscores:
+            all_task_ids.update(scores.keys())
+
+        # Compute mean for each task
+        for task_id in all_task_ids:
+            task_scores = [scores[task_id] for scores in state.prog_candidate_val_subscores if task_id in scores]
+            if task_scores:
+                task_means[task_id] = sum(task_scores) / len(task_scores)
+
+        return task_means
+
+    def _compute_advantages(self, scores: dict[DataId, float], task_means: dict[DataId, float]) -> list[float]:
+        """Compute advantages (score - mean) for provided task scores.
+
+        Returns a list of advantage values for tasks present both in `scores`
+        and `task_means`.
+        """
+        advantages: list[float] = []
+        for task_id, score in scores.items():
+            if task_id in task_means:
+                advantages.append(score - task_means[task_id])
+        return advantages
+    
+    def get_valset_advantage(self, program_idx: ProgramIdx, state: GEPAState) -> float:
+        """Return the average advantage of the program.
+        
+        Args:
+            program_idx: Index of the program to score.
+            state: Current GEPA optimization state.
+            
+        Returns:
+            Average advantage for the program .
+        """
+        if program_idx < 0 or program_idx >= len(state.prog_candidate_val_subscores):
+            return float("-inf")
+        
+        scores = state.prog_candidate_val_subscores[program_idx]
+        if not scores:
+            return float("-inf")
+        
+        # Compute task means (for selection subset only)
+        task_means = self._compute_task_means(state)
+        
+        # Calculate advantages for this program (only for selection subset tasks)
+        advantages = self._compute_advantages(scores, task_means)
+        
+        if not advantages:
+            return float("-inf")
+        
+        return sum(advantages) / len(advantages)
+    
 
 class FullEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     """Policy that evaluates all validation instances every time."""
@@ -145,53 +206,6 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
         self._selection_ids = all_ids[n_eval:]
 
         self._current_iteration = state_iteration
-
-    def _compute_task_means(self, state: GEPAState) -> dict[DataId, float]:
-        """Compute mean score per task across all programs on the validation set.
-        
-        Args:
-            state: Current GEPA optimization state.
-            
-        Returns:
-            Dictionary mapping task IDs to their mean scores across all programs.
-        """
-        # Calculate mean score per task across all programs (for all validation tasks)
-        task_means: dict[DataId, float] = {}
-        
-        # Get all unique task IDs from all programs
-        all_task_ids = set()
-        for scores in state.prog_candidate_val_subscores:
-            all_task_ids.update(scores.keys())
-        
-        # Compute mean for each task
-        for task_id in all_task_ids:
-            task_scores = []
-            for scores in state.prog_candidate_val_subscores:
-                if task_id in scores:
-                    task_scores.append(scores[task_id])
-            if task_scores:
-                task_means[task_id] = sum(task_scores) / len(task_scores)
-        
-        return task_means
-
-    def _compute_advantages(
-        self, scores: dict[DataId, float], task_means: dict[DataId, float]
-    ) -> list[float]:
-        """Compute advantages for a program.
-        
-        Args:
-            scores: Dictionary of task scores for a program.
-            task_means: Dictionary mapping task IDs to their mean scores.
-            
-        Returns:
-            List of advantages (score - mean for each task).
-        """
-        advantages = []
-        for task_id, score in scores.items():
-            if task_id in task_means:
-                advantage = score - task_means[task_id]
-                advantages.append(advantage)
-        return advantages
     
     def get_selection_batch(
         self,
@@ -285,35 +299,6 @@ class RandomSplitEvaluationPolicy(EvaluationPolicy[DataId, DataInst]):
     def get_valset_score(self, program_idx: ProgramIdx, state: GEPAState) -> float:
         """Return the score of the program on the valset"""
         return state.get_program_average_val_subset(program_idx)[0]
-
-    def get_advantage(self, program_idx: ProgramIdx, state: GEPAState) -> float:
-        """Return the average advantage of the program on the selection subset.
-        
-        Args:
-            program_idx: Index of the program to score.
-            state: Current GEPA optimization state.
-            
-        Returns:
-            Average advantage for the program on the selection subset.
-        """
-        if program_idx < 0 or program_idx >= len(state.prog_candidate_val_subscores):
-            return float("-inf")
-        
-        scores = state.prog_candidate_val_subscores[program_idx]
-        if not scores:
-            return float("-inf")
-        
-        # Compute task means (for selection subset only)
-        task_means = self._compute_task_means(state)
-        
-        # Calculate advantages for this program (only for selection subset tasks)
-        advantages = self._compute_advantages(scores, task_means)
-        
-        if not advantages:
-            return float("-inf")
-        
-        return sum(advantages) / len(advantages)
-
 
 __all__ = [
     "DataLoader",

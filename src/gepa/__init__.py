@@ -17,3 +17,23 @@ from .utils.stop_condition import (
     StopperProtocol,
     TimeoutStopCondition,
 )
+
+from importlib import import_module
+
+__all__ = [
+    "CompositeStopper",
+    "FileStopper",
+    "MaxMetricCallsStopper",
+    "NoImprovementStopper",
+    "ScoreThresholdStopper",
+    "SignalStopper",
+    "StopperProtocol",
+    "TimeoutStopCondition",
+]
+
+def __getattr__(name: str):
+    """Lazily import names from gepa.utils.stop_condition to avoid circular imports."""
+    if name in __all__:
+        mod = import_module("gepa.utils.stop_condition")
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
