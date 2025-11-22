@@ -195,6 +195,7 @@ class GEPAEngine(Generic[DataId, DataInst, Trajectory, RolloutOutput]):
             seed_candidate=self.seed_candidate,
             valset_evaluator=valset_evaluator,
             track_best_outputs=self.track_best_outputs,
+            val_evaluation_policy=self.val_evaluation_policy,
         )
 
         # Log base program score
@@ -234,7 +235,7 @@ class GEPAEngine(Generic[DataId, DataInst, Trajectory, RolloutOutput]):
                 # 1) Attempt merge first if scheduled and last iter found new program
                 if self.merge_proposer is not None and self.merge_proposer.use_merge:
                     if self.merge_proposer.merges_due > 0 and self.merge_proposer.last_iter_found_new_program:
-                        proposal = self.merge_proposer.propose(state)
+                        proposal = self.merge_proposer.propose(state, val_evaluation_policy=self.val_evaluation_policy)
                         self.merge_proposer.last_iter_found_new_program = False  # old behavior
 
                         if proposal is not None and proposal.tag == "merge":
@@ -264,7 +265,7 @@ class GEPAEngine(Generic[DataId, DataInst, Trajectory, RolloutOutput]):
                     self.merge_proposer.last_iter_found_new_program = False
 
                 # 2) Reflective mutation proposer
-                proposal = self.reflective_proposer.propose(state)
+                proposal = self.reflective_proposer.propose(state, val_evaluation_policy=self.val_evaluation_policy)
                 if proposal is None:
                     self.logger.log(f"Iteration {state.i + 1}: Reflective mutation did not propose a new candidate")
                     continue

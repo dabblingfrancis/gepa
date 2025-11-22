@@ -7,10 +7,11 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, ClassVar, Generic
 
-from gepa.core.adapter import RolloutOutput
+from gepa.core.adapter import DataInst, RolloutOutput
 from gepa.core.data_loader import DataId
 from gepa.gepa_utils import json_default
 from gepa.logging.logger import LoggerProtocol
+from gepa.strategies.eval_policy import EvaluationPolicy
 
 # Types for GEPAState
 ProgramIdx = int
@@ -43,11 +44,12 @@ class GEPAState(Generic[RolloutOutput, DataId]):
     best_outputs_valset: dict[DataId, list[tuple[ProgramIdx, RolloutOutput]]] | None
 
     validation_schema_version: int
-
+    
     def __init__(
         self,
         seed_candidate: dict[str, str],
         base_valset_eval_output: tuple[dict[DataId, RolloutOutput], dict[DataId, float]],
+        val_evaluation_policy: EvaluationPolicy[DataId, DataInst],
         track_best_outputs: bool = False,
     ):
         base_outputs, base_scores = base_valset_eval_output
@@ -73,6 +75,7 @@ class GEPAState(Generic[RolloutOutput, DataId]):
 
         self.full_program_trace = []
         self.validation_schema_version = self._VALIDATION_SCHEMA_VERSION
+        self.val_evaluation_policy = val_evaluation_policy
 
     def is_consistent(self) -> bool:
         assert len(self.program_candidates) == len(self.parent_program_for_candidate)
@@ -180,6 +183,14 @@ class GEPAState(Generic[RolloutOutput, DataId]):
             self.get_program_average_val_subset(program_idx)[0]
             for program_idx in range(len(self.prog_candidate_val_subscores))
         ]
+    
+    @property
+    def program_full_advantages_val_set(self) -> list[float]:
+        # TODO: does this work?
+        return [
+            self.val_evaluation_policy.get_valset_advantage(program_idx, self)
+            for program_idx in range(len(self.prog_candidate_val_subscores))
+        ]
 
     def _update_pareto_front_for_val_id(
         self,
@@ -250,6 +261,7 @@ def initialize_gepa_state(
     logger: LoggerProtocol,
     seed_candidate: dict[str, str],
     valset_evaluator: Callable[[dict[str, str]], tuple[dict[DataId, RolloutOutput], dict[DataId, float]]],
+    val_evaluation_policy: EvaluationPolicy[DataId, DataInst],
     track_best_outputs: bool = False,
 ) -> GEPAState[RolloutOutput, DataId]:
     if run_dir is not None and os.path.exists(os.path.join(run_dir, "gepa_state.bin")):
@@ -267,6 +279,7 @@ def initialize_gepa_state(
             seed_candidate,
             (seed_val_outputs, seed_val_scores),
             track_best_outputs=track_best_outputs,
+            val_evaluation_policy=val_evaluation_policy
         )
 
         gepa_state.num_full_ds_evals = 1

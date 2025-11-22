@@ -275,7 +275,7 @@ class MergeProposer(ProposeNewCandidate[DataId]):
 
         return selected[:num_subsample_ids]
 
-    def propose(self, state: GEPAState[RolloutOutput, DataId]) -> CandidateProposal[DataId] | None:
+    def propose(self, state: GEPAState[RolloutOutput, DataId], val_evaluation_policy=None) -> CandidateProposal[DataId] | None:
         i = state.i + 1
         state.full_program_trace[-1]["invoked_merge"] = True
 
@@ -291,6 +291,16 @@ class MergeProposer(ProposeNewCandidate[DataId]):
             return len(common_ids) >= self.val_overlap_floor
 
         pareto_front_programs = state.program_at_pareto_front_valset
+        
+        # Filter pareto front to selection subset if evaluation policy supports it
+        if val_evaluation_policy is not None and hasattr(val_evaluation_policy, 'get_selection_batch'):
+            selection_ids = set(val_evaluation_policy.get_selection_batch(self.valset, state))
+            pareto_front_programs = {
+                val_id: program_ids 
+                for val_id, program_ids in pareto_front_programs.items() 
+                if val_id in selection_ids
+            }
+        
         merge_candidates = find_dominator_programs(pareto_front_programs, state.program_full_scores_val_set)
         merge_output = sample_and_attempt_merge_programs_by_common_predictors(
             agg_scores=state.program_full_scores_val_set,

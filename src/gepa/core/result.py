@@ -19,6 +19,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
 
     - candidates: list of proposed candidates (component_name -> component_text)
     - parents: lineage info; for each candidate i, parents[i] is a list of parent indices or None
+    - val_aggregate_advantages: per-candidate aggregate advantage on the validation set (higher is better)
     - val_aggregate_scores: per-candidate aggregate score on the validation set (higher is better)
     - val_subscores: per-candidate mapping from validation id to score on the validation set (sparse dict)
     - per_val_instance_best_candidates: for each val instance t, a set of candidate indices achieving the current best score on t
@@ -35,7 +36,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
     - tracked_scores: optional tracked aggregate scores (if different from val_aggregate_scores)
 
     Convenience:
-    - best_idx: candidate index with the highest val_aggregate_scores
+    - best_idx: candidate index with the highest val_aggregate_advantages
     - best_candidate: the program text mapping for best_idx
     - non_dominated_indices(): candidate indices that are not dominated across per-instance pareto fronts
     - lineage(idx): parent chain from base to idx
@@ -48,6 +49,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
     # Core data
     candidates: list[dict[str, str]]
     parents: list[list[ProgramIdx | None]]
+    val_aggregate_advantages: list[float]
     val_aggregate_scores: list[float]
     val_subscores: list[dict[DataId, float]]
     per_val_instance_best_candidates: dict[DataId, set[ProgramIdx]]
@@ -75,8 +77,8 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
 
     @property
     def best_idx(self) -> int:
-        scores = self.val_aggregate_scores
-        return max(range(len(scores)), key=lambda i: scores[i])
+        advantages = self.val_aggregate_advantages
+        return max(range(len(advantages)), key=lambda i: advantages[i])
 
     @property
     def best_candidate(self) -> dict[str, str]:
@@ -88,6 +90,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
         return {
             "candidates": cands,
             "parents": self.parents,
+            "val_aggregate_advantages": self.val_aggregate_advantages,
             "val_aggregate_scores": self.val_aggregate_scores,
             "val_subscores": self.val_subscores,
             "best_outputs_valset": self.best_outputs_valset,
@@ -122,6 +125,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
         return {
             "candidates": [dict(candidate) for candidate in d.get("candidates", [])],
             "parents": [list(parent_row) for parent_row in d.get("parents", [])],
+            "val_aggregate_advantages": list(d.get("val_aggregate_advantages", [])),
             "val_aggregate_scores": list(d.get("val_aggregate_scores", [])),
             "discovery_eval_counts": list(d.get("discovery_eval_counts", [])),
             "total_metric_calls": d.get("total_metric_calls"),
@@ -182,6 +186,7 @@ class GEPAResult(Generic[RolloutOutput, DataId]):
         return GEPAResult(
             candidates=list(state.program_candidates),
             parents=list(state.parent_program_for_candidate),
+            val_aggregate_advantages=list(state.program_full_advantages_val_set),
             val_aggregate_scores=list(state.program_full_scores_val_set),
             best_outputs_valset=getattr(state, "best_outputs_valset", None),
             val_subscores=[dict(scores) for scores in state.prog_candidate_val_subscores],
