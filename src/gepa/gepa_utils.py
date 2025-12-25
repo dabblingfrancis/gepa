@@ -134,12 +134,8 @@ def select_program_candidate_from_pareto_front_softmax_sum(
     assert len(pareto_programs) > 0
 
     scores = [program_sum_scores[prog_idx] for prog_idx in pareto_programs]
-    finite_scores = [score for score in scores if math.isfinite(score)]
-    if not finite_scores:
-        return rng.choice(pareto_programs)
-
-    max_score = max(finite_scores)
-    weights = [math.exp(score - max_score) if math.isfinite(score) else 0.0 for score in scores]
+    max_score = max(scores)
+    weights = [math.exp(score - max_score) for score in scores]
     total_weight = sum(weights)
     if total_weight <= 0.0:
         return rng.choice(pareto_programs)
