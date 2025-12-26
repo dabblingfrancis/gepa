@@ -7,7 +7,7 @@ from gepa.core.state import GEPAState
 from gepa.gepa_utils import (
     idxmax,
     select_program_candidate_from_pareto_front,
-    select_program_candidate_from_pareto_front_softmax_sum,
+    select_program_candidate_with_softmax,
 )
 from gepa.proposer.reflective_mutation.base import CandidateSelector
 
@@ -28,7 +28,7 @@ class ParetoCandidateSelector(CandidateSelector):
         )
 
 
-class ParetoSoftmaxSumCandidateSelector(CandidateSelector):
+class SoftmaxCandidateSelector(CandidateSelector):
     def __init__(self, rng: random.Random | None):
         if rng is None:
             self.rng = random.Random(0)
@@ -37,7 +37,7 @@ class ParetoSoftmaxSumCandidateSelector(CandidateSelector):
 
     def select_candidate_idx(self, state: GEPAState) -> int:
         assert len(state.program_full_scores_val_set) == len(state.program_candidates)
-        return select_program_candidate_from_pareto_front_softmax_sum(
+        return select_program_candidate_with_softmax(
             state.program_at_pareto_front_valset,
             state.prog_candidate_val_subscores,
             self.rng,

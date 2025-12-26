@@ -118,7 +118,7 @@ def select_program_candidate_from_pareto_front(
     return curr_prog_id
 
 
-def select_program_candidate_from_pareto_front_softmax_sum(
+def select_program_candidate_with_softmax(
     pareto_front_programs: Mapping[Any, set[int]],
     program_val_subscores: list[Mapping[Any, float]],
     rng: random.Random,
