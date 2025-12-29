@@ -21,6 +21,7 @@ from gepa.strategies.candidate_selector import (
     CurrentBestCandidateSelector,
     EpsilonGreedyCandidateSelector,
     ParetoCandidateSelector,
+    SoftmaxCandidateSelector,
 )
 from gepa.strategies.component_selector import (
     AllReflectionComponentSelector,
@@ -38,7 +39,8 @@ def optimize(
     task_lm: str | ChatCompletionCallable | None = None,
     # Reflection-based configuration
     reflection_lm: LanguageModel | str | None = None,
-    candidate_selection_strategy: CandidateSelector | Literal["pareto", "current_best", "epsilon_greedy"] = "pareto",
+    candidate_selection_strategy: CandidateSelector
+    | Literal["pareto", "softmax", "current_best", "epsilon_greedy"] = "pareto",
     skip_perfect_score: bool = True,
     batch_sampler: BatchSampler | Literal["epoch_shuffled"] = "epoch_shuffled",
     reflection_minibatch_size: int | None = None,
@@ -114,7 +116,7 @@ def optimize(
 
     # Reflection-based configuration
     - reflection_lm: A `LanguageModel` instance that is used to reflect on the performance of the candidate program.
-    - candidate_selection_strategy: The strategy to use for selecting the candidate to update. Supported strategies: 'pareto', 'current_best', 'epsilon_greedy'. Defaults to 'pareto'.
+    - candidate_selection_strategy: The strategy to use for selecting the candidate to update. Supported strategies: 'pareto', 'softmax', 'current_best', 'epsilon_greedy'. Defaults to 'pareto'.
     - skip_perfect_score: Whether to skip updating the candidate if it achieves a perfect score on the minibatch.
     - batch_sampler: Strategy for selecting training examples. Can be a [BatchSampler](src/gepa/strategies/batch_sampler.py) instance or a string for a predefined strategy from ['epoch_shuffled']. Defaults to 'epoch_shuffled', which creates an [EpochShuffledBatchSampler](src/gepa/strategies/batch_sampler.py).
     - reflection_minibatch_size: The number of examples to use for reflection in each proposal step. Defaults to 3. Only valid when batch_sampler='epoch_shuffled' (default), and is ignored otherwise.
@@ -232,6 +234,7 @@ def optimize(
     if isinstance(candidate_selection_strategy, str):
         factories = {
             "pareto": lambda: ParetoCandidateSelector(rng=rng),
+            "softmax": lambda: SoftmaxCandidateSelector(rng=rng),
             "current_best": lambda: CurrentBestCandidateSelector(),
             "epsilon_greedy": lambda: EpsilonGreedyCandidateSelector(epsilon=0.1, rng=rng),
         }
@@ -241,7 +244,7 @@ def optimize(
         except KeyError as exc:
             raise ValueError(
                 f"Unknown candidate_selector strategy: {candidate_selection_strategy}. "
-                "Supported strategies: 'pareto', 'current_best', 'epsilon_greedy'"
+                "Supported strategies: 'pareto', 'softmax', 'current_best', 'epsilon_greedy'"
             ) from exc
     elif isinstance(candidate_selection_strategy, CandidateSelector):
         candidate_selector = candidate_selection_strategy

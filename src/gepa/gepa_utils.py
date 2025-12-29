@@ -2,6 +2,7 @@
 # https://github.com/gepa-ai/gepa
 
 
+import math
 import random
 from typing import Any, Mapping
 
@@ -115,3 +116,35 @@ def select_program_candidate_from_pareto_front(
 
     curr_prog_id = rng.choice(sampling_list)
     return curr_prog_id
+
+
+def select_program_candidate_with_softmax(
+    pareto_front_programs: Mapping[Any, set[int]],
+    program_val_subscores: list[Mapping[Any, float]],
+    rng: random.Random,
+) -> int:
+    program_sum_scores = {
+        prog_idx: sum(subscores.values()) if subscores else float("-inf")
+        for prog_idx, subscores in enumerate(program_val_subscores)
+    }
+    new_program_at_pareto_front_valset = remove_dominated_programs(
+        pareto_front_programs, scores=program_sum_scores
+    )
+    pareto_programs = sorted({prog_idx for front in new_program_at_pareto_front_valset.values() for prog_idx in front})
+    assert len(pareto_programs) > 0
+
+    scores = [program_sum_scores[prog_idx] for prog_idx in pareto_programs]
+    max_score = max(scores)
+    weights = [math.exp(score - max_score) for score in scores]
+    total_weight = sum(weights)
+    if total_weight <= 0.0:
+        return rng.choice(pareto_programs)
+
+    threshold = rng.random() * total_weight
+    cumulative = 0.0
+    for prog_idx, weight in zip(pareto_programs, weights, strict=True):
+        cumulative += weight
+        if threshold <= cumulative:
+            return prog_idx
+
+    return pareto_programs[-1]
